@@ -317,23 +317,29 @@ export function ClientCameraPortal() {
   // CASE 1: NOT LOGGED IN YET (Show ultra-simple elderly-friendly phone login)
   if (!activeClientCase) {
     return (
-      <div className="w-full min-h-[640px] bg-slate-900 text-white flex flex-col justify-center items-center p-6 select-none">
+      <div className="w-full min-h-[100dvh] bg-slate-950 text-white flex flex-col justify-center items-center p-6 select-none overscroll-none">
         <div className="max-w-sm w-full space-y-6">
-          <div className="text-center space-y-2">
-            <div className="w-16 h-16 rounded-2xl bg-blue-600 text-white flex items-center justify-center font-black text-xl mx-auto shadow-xl">
-              UD
+          <div className="text-center space-y-3">
+            <div className="w-24 h-24 rounded-2xl overflow-hidden mx-auto shadow-2xl border border-white/10 ring-4 ring-amber-700/20">
+              <img
+                src="/logo.jpg"
+                alt="UD CLINIC TORO"
+                className="w-full h-full object-cover"
+              />
             </div>
-            <h2 className="text-lg font-bold text-white tracking-tight">
-              UD Clinic Post-Op Care
-            </h2>
-            <p className="text-xs text-slate-400">
-              ระบบติดตามอาการหลังผ่าตัดดึงหน้า
-            </p>
+            <div>
+              <h2 className="text-xl font-black text-white tracking-tight">
+                UD CLINIC TORO
+              </h2>
+              <p className="text-xs text-slate-400 mt-0.5">
+                ระบบติดตามอาการหลังผ่าตัดดึงหน้า (Face-Lift Care)
+              </p>
+            </div>
           </div>
 
           <form
             onSubmit={handlePhoneLoginSubmit}
-            className="bg-slate-800/90 rounded-3xl p-6 border border-slate-700/80 shadow-2xl space-y-5"
+            className="bg-slate-900/90 rounded-3xl p-6 border border-slate-800 shadow-2xl space-y-5"
           >
             <div className="space-y-2">
               <label className="text-xs font-bold text-slate-200 block text-center">
@@ -344,11 +350,10 @@ export function ClientCameraPortal() {
                 inputMode="numeric"
                 pattern="[0-9]*"
                 maxLength={10}
-                placeholder="เช่น 0812345678"
                 value={phoneNumberInput}
                 onChange={(e) => setPhoneNumberInput(e.target.value)}
                 disabled={isLoggingIn}
-                className="w-full text-center text-lg font-black tracking-widest py-3.5 px-4 rounded-2xl bg-slate-900 border border-slate-600 text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 disabled:opacity-50"
+                className="w-full text-center text-lg font-black tracking-widest py-3.5 px-4 rounded-2xl bg-slate-950 border border-slate-700 text-white focus:outline-hidden focus:border-amber-600 focus:ring-2 focus:ring-amber-600/30 disabled:opacity-50"
                 autoFocus
               />
               <p className="text-[11px] text-slate-400 text-center">
@@ -366,7 +371,7 @@ export function ClientCameraPortal() {
             <button
               type="submit"
               disabled={isLoggingIn}
-              className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 active:scale-95 transition-all cursor-pointer"
+              className="w-full py-4 rounded-2xl bg-amber-700 hover:bg-amber-600 disabled:bg-amber-900 text-white text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-amber-900/40 active:scale-95 transition-all cursor-pointer"
             >
               {isLoggingIn ? (
                 <>
@@ -386,7 +391,7 @@ export function ClientCameraPortal() {
             <p>หากยังไม่ได้ลงทะเบียนเคส กรุณาติดต่อเจ้าหน้าที่คลินิก</p>
             <a
               href="tel:0814567890"
-              className="text-blue-400 font-semibold underline block"
+              className="text-amber-400 font-semibold underline block"
             >
               โทร 081-456-7890
             </a>
@@ -402,7 +407,7 @@ export function ClientCameraPortal() {
     SILHOUETTE_GUIDES.front;
 
   return (
-    <div className="relative w-full h-[90vh] max-h-[820px] bg-black text-white flex flex-col justify-between overflow-hidden select-none">
+    <div className="relative w-full h-[100dvh] max-h-[100dvh] max-w-md mx-auto bg-black text-white flex flex-col justify-between overflow-hidden overscroll-none select-none touch-none">
       <canvas ref={canvasRef} className="hidden" />
       <input
         ref={fileInputRef}
@@ -413,12 +418,19 @@ export function ClientCameraPortal() {
       />
 
       {/* TOP OVERLAY BAR (Clean & Minimal) */}
-      <div className="absolute top-0 inset-x-0 z-30 p-3 bg-gradient-to-b from-black/85 via-black/40 to-transparent flex items-center justify-between pointer-events-auto">
+      <div className="absolute top-0 inset-x-0 z-30 p-3 bg-gradient-to-b from-black/90 via-black/40 to-transparent flex items-center justify-between pointer-events-auto">
         <div className="flex items-center gap-2">
-          <span className="px-2.5 py-1 rounded-full bg-blue-600 text-white text-xs font-black tracking-wide shadow-sm">
+          <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/20 shrink-0 shadow-sm">
+            <img
+              src="/logo.jpg"
+              alt="UD Clinic"
+              className="w-full h-full object-cover"
+            />
+          </div>
+          <span className="px-2.5 py-1 rounded-full bg-amber-700 text-white text-xs font-black tracking-wide shadow-sm">
             D+{postOpDay}
           </span>
-          <span className="text-xs font-medium text-slate-200 truncate max-w-[130px]">
+          <span className="text-xs font-medium text-slate-200 truncate max-w-[120px]">
             {activeClientCase.patientName}
           </span>
         </div>
@@ -775,13 +787,15 @@ export function ClientCameraPortal() {
             </div>
 
             {/* Note */}
-            <div>
+            <div className="space-y-1">
+              <label className="text-xs text-slate-300 font-semibold block">
+                ข้อความเพิ่มเติมถึงแพทย์ (ถ้ามี)
+              </label>
               <input
                 type="text"
-                placeholder="ข้อความเพิ่มเติมถึงแพทย์ (ถ้ามี)..."
                 value={patientNote}
                 onChange={(e) => setPatientNote(e.target.value)}
-                className="w-full text-xs p-3 rounded-xl bg-slate-800 border border-slate-700 text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500"
+                className="w-full text-xs p-3 rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-hidden focus:border-amber-500"
               />
             </div>
 

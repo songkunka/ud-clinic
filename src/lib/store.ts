@@ -52,8 +52,37 @@ export function useAppStore() {
   const [protocol, setProtocol] = useState<ReportingProtocol>(INITIAL_PROTOCOL);
   const [isLoaded, setIsLoaded] = useState(false);
 
+  const isMockName = (name: string) => {
+    const lower = (name || '').toLowerCase();
+    return (
+      lower.includes('siriporn') ||
+      lower.includes('ศิริพร') ||
+      lower.includes('porntip') ||
+      lower.includes('พรทิพย์') ||
+      lower.includes('wanna') ||
+      lower.includes('วรรณา') ||
+      lower.includes('kamonporn') ||
+      lower.includes('กมลพร') ||
+      lower.includes('วิมลมัส') ||
+      lower.includes('vimonmas')
+    );
+  };
+
   const loadFromStorage = () => {
     if (typeof window === 'undefined') return;
+
+    // Purge any legacy keys
+    try {
+      [
+        'ud_clinic_reports',
+        'ud_clinic_cases',
+        'ud_clinic_patients',
+        'ud_clinic_audits',
+        'ud_clinic_reports_v1',
+        'ud_clinic_cases_v1',
+        'ud_clinic_patients_v1',
+      ].forEach((k) => localStorage.removeItem(k));
+    } catch {}
 
     try {
       const storedPortal = localStorage.getItem(STORAGE_KEY_ACTIVE_PORTAL);
@@ -63,13 +92,19 @@ export function useAppStore() {
       if (storedToken) setClientTokenState(storedToken);
 
       const storedReports = localStorage.getItem(STORAGE_KEY_REPORTS);
-      setReports(storedReports ? JSON.parse(storedReports) : INITIAL_REPORTS);
+      const parsedReports: DailyReport[] = storedReports ? JSON.parse(storedReports) : INITIAL_REPORTS;
+      const cleanReports = parsedReports.filter((r) => !isMockName(r.patientName));
+      setReports(cleanReports);
 
       const storedCases = localStorage.getItem(STORAGE_KEY_CASES);
-      setCases(storedCases ? JSON.parse(storedCases) : INITIAL_CASES);
+      const parsedCases: SurgeryCase[] = storedCases ? JSON.parse(storedCases) : INITIAL_CASES;
+      const cleanCases = parsedCases.filter((c) => !isMockName(c.patientName));
+      setCases(cleanCases);
 
       const storedPatients = localStorage.getItem(STORAGE_KEY_PATIENTS);
-      setPatients(storedPatients ? JSON.parse(storedPatients) : INITIAL_PATIENTS);
+      const parsedPatients: Patient[] = storedPatients ? JSON.parse(storedPatients) : INITIAL_PATIENTS;
+      const cleanPatients = parsedPatients.filter((p) => !isMockName(p.displayName));
+      setPatients(cleanPatients);
 
       const storedAudits = localStorage.getItem(STORAGE_KEY_AUDITS);
       setAuditLogs(storedAudits ? JSON.parse(storedAudits) : INITIAL_AUDIT_LOGS);

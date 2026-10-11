@@ -3,6 +3,13 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js';
 const getEnvUrl = () => process.env.NEXT_PUBLIC_SUPABASE_URL || '';
 const getEnvKey = () => process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || '';
 
+export function cleanSupabaseUrl(rawUrl: string): string {
+  let url = (rawUrl || '').trim();
+  url = url.replace(/\/rest\/v1\/?$/, '');
+  url = url.replace(/\/+$/, '');
+  return url;
+}
+
 export function getSupabaseCredentials(): { url: string; key: string } {
   let url = getEnvUrl();
   let key = getEnvKey();
@@ -14,7 +21,7 @@ export function getSupabaseCredentials(): { url: string; key: string } {
     if (storedKey) key = storedKey;
   }
 
-  return { url: url.trim(), key: key.trim() };
+  return { url: cleanSupabaseUrl(url), key: key.trim() };
 }
 
 export function isSupabaseConfigured(): boolean {
@@ -56,7 +63,7 @@ export function getSupabase(): SupabaseClient | null {
 
 export function setSupabaseCredentials(url: string, key: string): boolean {
   if (typeof window !== 'undefined') {
-    const cleanUrl = url.trim();
+    const cleanUrl = cleanSupabaseUrl(url);
     const cleanKey = key.trim();
     localStorage.setItem('ud_supabase_url', cleanUrl);
     localStorage.setItem('ud_supabase_anon_key', cleanKey);

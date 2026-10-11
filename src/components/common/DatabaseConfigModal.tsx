@@ -222,10 +222,9 @@ export function DatabaseConfigModal({ isOpen, onClose }: Props) {
             </label>
             <input
               type="url"
-              placeholder="https://xxxxxxxxxxxxxxxxxxxx.supabase.co"
               value={url}
               onChange={(e) => setUrl(e.target.value)}
-              className="w-full text-xs font-mono py-2.5 px-3 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500"
+              className="w-full text-xs font-mono py-2.5 px-3 rounded-xl bg-slate-950 border border-slate-700 text-white focus:outline-hidden focus:border-blue-500"
               required
             />
             <p className="text-[11px] text-slate-400">
@@ -240,10 +239,9 @@ export function DatabaseConfigModal({ isOpen, onClose }: Props) {
             </label>
             <input
               type="text"
-              placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
               value={key}
               onChange={(e) => setKey(e.target.value)}
-              className="w-full text-xs font-mono py-2.5 px-3 rounded-xl bg-slate-950 border border-slate-700 text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500"
+              className="w-full text-xs font-mono py-2.5 px-3 rounded-xl bg-slate-950 border border-slate-700 text-white focus:outline-hidden focus:border-blue-500"
               required
             />
             <p className="text-[11px] text-slate-400">

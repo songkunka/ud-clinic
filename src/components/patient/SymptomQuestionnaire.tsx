@@ -319,7 +319,6 @@ export function SymptomQuestionnaire({
               rows={3}
               value={patientNote}
               onChange={(e) => setPatientNote(e.target.value)}
-              placeholder="ระบุความรู้สึกเพิ่มเติม เช่น ทานยาแก้ปวดแล้วดีขึ้น หรือรู้สึกตึงบริเวณใดเป็นพิเศษ..."
               className="w-full text-xs p-3 rounded-xl border border-slate-200 focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-hidden bg-white text-slate-900"
             />
           </div>

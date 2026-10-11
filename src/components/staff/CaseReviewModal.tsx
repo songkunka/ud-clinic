@@ -315,7 +315,6 @@ export function CaseReviewModal({
                   rows={2}
                   value={internalNote}
                   onChange={(e) => setInternalNote(e.target.value)}
-                  placeholder="บันทึกข้อสังเกตทางการแพทย์ แผนการรักษา หรือประเด็นที่ปรึกษาแพทย์..."
                   className="w-full text-xs p-2.5 rounded-xl border border-amber-200 bg-amber-50/20 text-slate-900 focus:outline-hidden focus:border-amber-400"
                 />
               </div>
@@ -335,7 +334,6 @@ export function CaseReviewModal({
                   rows={2}
                   value={customerMessage}
                   onChange={(e) => setCustomerMessage(e.target.value)}
-                  placeholder="คำแนะนำที่อนุมัติให้แจ้งคนไข้ เช่น การประคบเย็น แผลแห้งดี หรือภาพที่ขอเพิ่มเติม..."
                   className="w-full text-xs p-2.5 rounded-xl border border-blue-200 bg-blue-50/20 text-slate-900 focus:outline-hidden focus:border-blue-400"
                 />
               </div>

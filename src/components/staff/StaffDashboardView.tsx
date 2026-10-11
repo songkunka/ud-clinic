@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useAppStore } from '@/lib/store';
 import { DailyReport, SurgeryCase } from '@/lib/types';
 import { StatusBadge } from '@/components/common/StatusBadge';
@@ -52,11 +52,13 @@ export function StaffDashboardView() {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [serviceType, setServiceType] = useState('SMAS Full Face-Lift & Neck Lift');
   const [surgeonName, setSurgeonName] = useState('นพ.สมชาย เกียรติเวชช์');
-  const [surgeryDate, setSurgeryDate] = useState(
-    new Date().toISOString().split('T')[0]
-  );
+  const [surgeryDate, setSurgeryDate] = useState('2026-10-11');
   const [createdCaseResult, setCreatedCaseResult] = useState<SurgeryCase | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+
+  useEffect(() => {
+    setSurgeryDate(new Date().toISOString().split('T')[0]);
+  }, []);
 
   // Metrics
   const countPending = reports.filter(
@@ -119,16 +121,25 @@ export function StaffDashboardView() {
     <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
       {/* Top Header */}
       <div className="flex flex-wrap items-center justify-between gap-4 pb-4 border-b border-slate-200">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-bold uppercase tracking-wider text-blue-700 bg-blue-100 px-2.5 py-0.5 rounded-md border border-blue-200">
-              Staff & Doctor Clinical Portal
-            </span>
-            <span className="text-xs text-slate-500">UD Clinic</span>
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 rounded-xl overflow-hidden border border-slate-200 shadow-sm shrink-0">
+            <img
+              src="/logo.jpg"
+              alt="UD CLINIC TORO"
+              className="w-full h-full object-cover"
+            />
           </div>
-          <h2 className="text-xl font-bold text-slate-900 mt-1">
-            ศูนย์ติดตามและคัดกรองเคสหลังผ่าตัดดึงหน้า
-          </h2>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-black uppercase tracking-wider text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-md border border-amber-200">
+                UD CLINIC TORO
+              </span>
+              <span className="text-xs text-slate-500 font-semibold">Staff & Doctor Portal</span>
+            </div>
+            <h2 className="text-xl font-bold text-slate-900 mt-0.5">
+              ศูนย์ติดตามและคัดกรองเคสหลังผ่าตัดดึงหน้า
+            </h2>
+          </div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -407,7 +418,6 @@ export function StaffDashboardView() {
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-2.5" />
               <input
                 type="text"
-                placeholder="ค้นหาชื่อคนไข้ หรือ HN..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full text-xs pl-9 pr-3 py-2 rounded-xl border border-slate-200 focus:outline-hidden focus:border-blue-500 bg-slate-50 text-slate-800"
@@ -575,7 +585,6 @@ export function StaffDashboardView() {
                   <input
                     type="text"
                     required
-                    placeholder="เช่น คุณวรรณา สุขสมบูรณ์"
                     value={patientName}
                     onChange={(e) => setPatientName(e.target.value)}
                     className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:outline-hidden focus:border-blue-500"
@@ -590,7 +599,6 @@ export function StaffDashboardView() {
                     <input
                       type="text"
                       required
-                      placeholder="เช่น 69-00124"
                       value={hn}
                       onChange={(e) => setHn(e.target.value)}
                       className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:outline-hidden focus:border-blue-500"
@@ -604,7 +612,6 @@ export function StaffDashboardView() {
                     <input
                       type="tel"
                       required
-                      placeholder="เช่น 0814567890"
                       value={phoneNumber}
                       onChange={(e) => setPhoneNumber(e.target.value)}
                       className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:outline-hidden focus:border-blue-500"
