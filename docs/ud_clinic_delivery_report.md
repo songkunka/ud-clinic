@@ -1,54 +1,42 @@
-# สรุปผลการปรับปรุงระบบ UD Clinic (เวอร์ชัน Camera-First 2-Portal)
+# สรุปผลการปรับปรุงระบบ UD Clinic (เวอร์ชัน Production-Ready)
 
-> อ้างอิงตามข้อคิดเห็นของผู้ใช้:  
-> 1. มีแค่ 2 หน้าหลัก (Client / Staff — โดยรวมทั้ง Care Staff และแพทย์เข้าด้วยกัน)  
-> 2. ปรับปรุง UX/UI: ฝั่ง Client Portal เปิดเข้ามาเป็นกล้องทันที เป็นจุดศูนย์กลางใหญ่ ขอ Permission กล้องทันที และไม่มีตัวหนังสือเยอะ
-
----
-
-## 1. วิดีโอบันทึกการทดสอบระบบเวอร์ชันปรับปรุง (Recording)
-
-![วิดีโอทดสอบระบบ Client Camera Portal และ Staff Portal](/C:/Users/WINDOWS/.gemini/antigravity-ide/brain/f64e72d2-1eed-4e55-bc3c-e483b3be5ad3/ud_clinic_camera_v2_1791725928567.webp)
-
----
-
-## 2. รายละเอียดการปรับปรุง (Changelog)
-
-### 2.1 ลดเหลือเพียง 2 หน้าหลัก (Two Unified Portals)
-- ด้านบนสุดมีปุ่มสลับเพียง 2 หน้า:
-  - **`คนไข้ (Client)`**: สำหรับคนไข้เข้ามารายงานอาการประจำวัน
-  - **`เจ้าหน้าที่ & แพทย์ (Staff)`**: ศูนย์รวมการทำงานของทีมคลินิก ทั้งพยาบาล Care Coordinator และแพทย์ศัลยกรรม (ตรวจคัดกรอง, ดูภาพ 5 มุม, ให้คำแนะนำ, และเปรียบเทียบภาพย้อนหลัง)
-
-### 2.2 Client Portal: Camera-First Centerpiece (กล้องเป็นจุดศูนย์กลางทันที)
-- **เปิดแอปปุ๊บเจอกล้องทันที:** Viewfinder กล้องมือถือครอบคลุมพื้นที่เกือบทั้งหมดของหน้าจอ
-- **ขอ Permission ทันที:** สั่งเปิดกล้องหน้า (`facingMode: user`) ผ่าน Web API อัตโนมัติเมื่อโหลดหน้าจอ
-- **ลดทอนข้อความ (Ultra-Minimal Text):**
-  - ตัดข้อความบรรยายยาวยืดทั้งหมดออก
-  - มีเฉพาะป้ายสั้นกระชับ: `D+1 • ชื่อคนไข้`, `1/5 หน้าตรง (เก็บผม ถอดแว่น)`
-  - แถบวงกลม 5 มุมด้านล่างพร้อมเครื่องหมายถูกสีเขียวเมื่อถ่ายเสร็จ
-  - กรอบ Silhouette Overlay โครงหน้าและคางวางบนจอภาพ
-- **ปุ่มชัตเตอร์ขนาดใหญ่สไตล์ iOS Camera:**
-  - ปุ่มชัตเตอร์สีขาววงใหญ่ กดแล้วมีพรีวิวภาพทันที พร้อมปุ่ม `[ถ่ายใหม่]` และ `[ใช้ภาพนี้]`
-  - มีปุ่มสลับกล้องหน้า/หลัง และปุ่มภาพจำลอง (Demo) สำหรับทดสอบบนคอมพิวเตอร์ที่ไม่มีเว็บแคม
-- **แบบสอบถามอาการสไตล์ Tactile Quick-Select:**
-  - เมื่อถ่ายครบ 5 มุม จะแสดง Sheet บันทึกอาการแบบกระชับ (ไม่มีกำแพงตัวหนังสือ)
-  - แถบกดเลือกระดับความปวด 0-10
-  - ปุ่มกด 3 ตัวเลือก: อาการบวม (ยุบลง / เท่าเดิม / บวมขึ้น)
-  - ปุ่มกด 3 ตัวเลือก: แผลซึม (แผลแห้ง / ซึมเล็กน้อย / ซึมมาก)
-  - ปุ่มกดอาการไข้ (ไม่มีไข้ / มีไข้)
-  - ปุ่มกดส่งรายงานทันที
-- **ผลตรวจจากแพทย์:** ปรากฏเป็นปุ่มเล็กๆ ด้านบน `[ผลตรวจ]` ให้กดเปิดดูคำแนะนำแพทย์ได้โดยไม่บดบังหน้ากล้อง
+> **การปรับปรุงตามความต้องการล่าสุด:**
+> 1. **ลบ Placeholder Text ทั้งหมด:** ไม่มีข้อความตัวอย่างค้างในช่องกรอกข้อมูลหรือกล่องข้อความ
+> 2. **ลบ Mock Patients ทั้งหมด:** ลบชื่อจำลอง (Siriporn, Porntip, Wanna ฯลฯ) ออกจากระบบทั้งหมด เหลือเฉพาะคนไข้จริงในคลินิก
+> 3. **ลบแถบ Demo Switcher ด้านบน:** แยกหน้าตาม URL จริงระดับ Production:
+>    - หน้าคนไข้ (Client): `http://localhost:3000/` หรือ `/client`
+>    - หน้าคลินิกและแพทย์ (Staff): `http://localhost:3000/staff`
+> 4. **เปลี่ยน Logo เว็บไซต์:** นำเข้าโลโก้จริงของคลินิก (`UD CLINIC TORO` สีส้มอิฐ Terracotta Red) แสดงทั้งหน้าล็อกอิน, แถบหัวกล้อง, หน้าแพทย์ และ Favicon
+> 5. **Device Friendly สมบูรณ์แบบสำหรับมือถือ:**
+>    - ล็อค Viewport หน้ากล้องให้พอดี 100dvh บนทุกหน้าจอมือถือ
+>    - ปิดการเลื่อน/Rubber-band bounce (`overscroll-behavior: none`)
+>    - ปิดการซูม Pinch/Double-tap (`touch-action: manipulation`, `maximumScale: 1`, `userScalable: false`)
+>    - ป้องกัน iOS Safari Auto-Zoom ด้วย Font Size มาตรฐาน 16px
+> 6. **เชื่อมต่อฐานข้อมูล Supabase Cloud จริง:** บันทึกข้อมูลและภาพถ่ายจริงเข้า PostgreSQL Cloud และพร้อม Deploy ขึ้น Netlify
 
 ---
 
-## 3. วิธีการทดสอบใช้งาน
+## 1. รายละเอียดการปรับปรุงทางเทคนิค (Technical Implementation)
 
-เปิดเบราว์เซอร์ไปที่: **`http://localhost:3000`**
+| ข้อที่ปรับปรุง | สิ่งที่ดำเนินการ | ไฟล์ที่เกี่ยวข้อง |
+|---|---|---|
+| **1. ลบ Placeholder Text** | นำแอตทริบิวต์ `placeholder="..."` ออกจาก input และ textarea ทั้งหมดในระบบ | `ClientCameraPortal.tsx`<br>`StaffDashboardView.tsx`<br>`CaseReviewModal.tsx`<br>`SymptomQuestionnaire.tsx`<br>`DatabaseConfigModal.tsx` |
+| **2. ลบ Mock Data** | เคลียร์ข้อมูล mock ทั้งหมด (Siriporn, Porntip, Wanna), ล้าง cache ใน localStorage และดึงเฉพาะข้อมูลจริงจาก Supabase | `src/lib/store.ts` |
+| **3. ลบ DemoBar & ทำ Dedicated Routes** | ลบ `<DemoBar />` ออกจากหน้าเว็บ, สร้าง Next.js App Router แยกเป็น `/client` และ `/staff` พร้อมตั้งค่า default root `/` เป็น Client Camera Portal | `src/app/page.tsx`<br>`src/app/client/page.tsx`<br>`src/app/staff/page.tsx` |
+| **4. เปลี่ยน Real Logo** | นำเข้ารูปโลโก้ UD CLINIC TORO สีส้มอิฐ บันทึกที่ `public/logo.jpg` แสดงในหน้าล็อกอินคนไข้, Overlay ด้านบนกล้อง, แถบหัวของ Staff และ metadata icon | `public/logo.jpg`<br>`src/app/layout.tsx`<br>`ClientCameraPortal.tsx`<br>`StaffDashboardView.tsx` |
+| **5. Mobile Viewport Lock** | ล็อค Viewport: `user-scalable=no`, `maximum-scale=1`, กำหนด `height: 100dvh`, ปิด scroll bounce ด้วย `overscroll-behavior: none` | `src/app/layout.tsx`<br>`src/app/globals.css`<br>`ClientCameraPortal.tsx` |
+| **6. Git & GitHub Sync** | ทำ Commit และ Push รหัสต้นฉบับขึ้น GitHub Repository `songkunka/ud-clinic` (Branch `main`) เรียบร้อยแล้ว | Git Commit `d8318c9` |
 
-1. **ฝั่งคนไข้ (Client):**
-   - เปิดเข้ามาจะเจอกล้องเปิดขึ้นมาเป็นจุดศูนย์กลางทันที
-   - กดปุ่มชัตเตอร์ (หรือปุ่มไอคอนจำลองรูปภาพ) เพื่อบันทึกภาพทีละมุม (1 ถึง 5)
-   - เมื่อครบ 5 มุม ระบบจะเปิด Sheet ให้กดเลือกระดับปวดและการบวม แล้วกดส่งรายงาน
-2. **ฝั่งคลินิก (Staff):**
-   - แตะปุ่ม **`เจ้าหน้าที่ & แพทย์ (Staff)`** ด้านบน
-   - จะเห็นรายงานที่คนไข้เพิ่งส่งเข้ามาปรากฏในคิวทันที สามารถกด **`เปิดตรวจ`** เพื่อดูภาพความละเอียดสูง บันทึกผลตรวจ หรือเปิดแท็บ **`เปรียบเทียบภาพใบหน้าย้อนหลัง`**
+---
+
+## 2. การนำขึ้น Netlify เพื่อทดสอบบนมือถือจริง (Netlify Setup Guide)
+
+เมื่อนำโปรเจกต์ `https://github.com/songkunka/ud-clinic` ไปเชื่อมกับ Netlify:
+
+1. **Build Settings:**
+   - **Base directory:** `ud-clinic` (เนื่องจากโฟลเดอร์โปรเจกต์อยู่ที่ `ud-clinic`)
+   - **Build command:** `npm run build`
+   - **Publish directory:** `.next` (หรือใช้ Netlify Next.js Runtime plugin อัตโนมัติ)
+2. **Environment Variables (ตั้งค่าใน Netlify Site configuration > Environment variables):**
+   - `NEXT_PUBLIC_SUPABASE_URL`: `https://adhodkngteqwdcurmfsx.supabase.co`
+   - `NEXT_PUBLIC_SUPABASE_ANON_KEY`: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFkaG9ka25ndGVxd2RjdXJtZnN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE3MjU1MTIsImV4cCI6MjEwNzMwMTUxMn0.I4Nn1W5lwJB8WndTXOnxKY8EyKtfLWJmD29W7-HSN6Q`
