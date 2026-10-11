@@ -36,6 +36,7 @@ export function ClientCameraPortal() {
   // Phone Login State for Elderly Patients
   const [phoneNumberInput, setPhoneNumberInput] = useState('');
   const [loginError, setLoginError] = useState<string | null>(null);
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
 
   // Camera & Capture State
   const [currentAngleIndex, setCurrentAngleIndex] = useState(0);
@@ -288,7 +289,7 @@ export function ClientCameraPortal() {
   };
 
   // HANDLE PHONE LOGIN FOR ELDERLY PATIENTS
-  const handlePhoneLoginSubmit = (e: React.FormEvent) => {
+  const handlePhoneLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError(null);
 
@@ -298,11 +299,18 @@ export function ClientCameraPortal() {
       return;
     }
 
-    const matched = clientLoginWithPhone(clean);
-    if (!matched) {
-      setLoginError(
-        'ไม่พบข้อมูลเคสของเบอร์โทรนี้ในระบบ กรุณาติดต่อคลินิกเพื่อลงทะเบียนก่อนค่ะ'
-      );
+    setIsLoggingIn(true);
+    try {
+      const matched = await clientLoginWithPhone(clean);
+      if (!matched) {
+        setLoginError(
+          'ไม่พบข้อมูลเคสของเบอร์โทรนี้ในระบบ กรุณาติดต่อคลินิกเพื่อลงทะเบียนก่อนค่ะ'
+        );
+      }
+    } catch {
+      setLoginError('เกิดข้อผิดพลาดในการตรวจสอบข้อมูล กรุณาลองใหม่อีกครั้ง');
+    } finally {
+      setIsLoggingIn(false);
     }
   };
 
@@ -339,7 +347,8 @@ export function ClientCameraPortal() {
                 placeholder="เช่น 0812345678"
                 value={phoneNumberInput}
                 onChange={(e) => setPhoneNumberInput(e.target.value)}
-                className="w-full text-center text-lg font-black tracking-widest py-3.5 px-4 rounded-2xl bg-slate-900 border border-slate-600 text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30"
+                disabled={isLoggingIn}
+                className="w-full text-center text-lg font-black tracking-widest py-3.5 px-4 rounded-2xl bg-slate-900 border border-slate-600 text-white placeholder-slate-500 focus:outline-hidden focus:border-blue-500 focus:ring-2 focus:ring-blue-500/30 disabled:opacity-50"
                 autoFocus
               />
               <p className="text-[11px] text-slate-400 text-center">
@@ -356,10 +365,20 @@ export function ClientCameraPortal() {
 
             <button
               type="submit"
-              className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 active:scale-95 transition-all cursor-pointer"
+              disabled={isLoggingIn}
+              className="w-full py-4 rounded-2xl bg-blue-600 hover:bg-blue-500 disabled:bg-blue-800 text-white text-sm font-black flex items-center justify-center gap-2 shadow-lg shadow-blue-600/30 active:scale-95 transition-all cursor-pointer"
             >
-              <LogIn className="w-5 h-5" />
-              <span>เข้าสู่ระบบเพื่อถ่ายรูป</span>
+              {isLoggingIn ? (
+                <>
+                  <RefreshCw className="w-5 h-5 animate-spin" />
+                  <span>กำลังตรวจสอบข้อมูล...</span>
+                </>
+              ) : (
+                <>
+                  <LogIn className="w-5 h-5" />
+                  <span>เข้าสู่ระบบเพื่อถ่ายรูป</span>
+                </>
+              )}
             </button>
           </form>
 

@@ -21,6 +21,7 @@ import {
   INITIAL_AUDIT_LOGS,
   INITIAL_PROTOCOL,
 } from './mock-data';
+import { dbService } from './db-service';
 
 // Storage keys versioned to v2 (Clean slate without dummy data)
 const STORAGE_KEY_REPORTS = 'ud_clinic_clean_reports_v2';
@@ -112,6 +113,40 @@ export function useAppStore() {
     };
   }, []);
 
+  // Cloud Sync
+  useEffect(() => {
+    if (isLoaded && dbService.isAvailable()) {
+      Promise.all([dbService.getAllCases(), dbService.getAllReports()]).then(
+        ([cloudCases, cloudReports]) => {
+          if (cloudCases.length > 0) {
+            setCases((prev) => {
+              const map = new Map<string, SurgeryCase>();
+              prev.forEach((c) => map.set(c.id, c));
+              cloudCases.forEach((c) => map.set(c.id, c));
+              const merged = Array.from(map.values());
+              if (typeof window !== 'undefined') {
+                localStorage.setItem(STORAGE_KEY_CASES, JSON.stringify(merged));
+              }
+              return merged;
+            });
+          }
+          if (cloudReports.length > 0) {
+            setReports((prev) => {
+              const map = new Map<string, DailyReport>();
+              prev.forEach((r) => map.set(r.id, r));
+              cloudReports.forEach((r) => map.set(r.id, r));
+              const merged = Array.from(map.values());
+              if (typeof window !== 'undefined') {
+                localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(merged));
+              }
+              return merged;
+            });
+          }
+        }
+      ).catch((err) => console.warn('Supabase initial sync error:', err));
+    }
+  }, [isLoaded]);
+
   const setPortal = (newPortal: PortalMode) => {
     setPortalState(newPortal);
     if (typeof window !== 'undefined') {
@@ -121,8 +156,16 @@ export function useAppStore() {
   };
 
   // CLIENT LOGIN: By Magic Token
-  const clientLoginWithToken = (token: string): SurgeryCase | null => {
-    const matched = cases.find((c) => c.token === token || c.id === token);
+  const clientLoginWithToken = async (token: string): Promise<SurgeryCase | null> => {
+    let matched = cases.find((c) => c.token === token || c.id === token);
+    if (!matched && dbService.isAvailable()) {
+      const cloudCase = await dbService.findCaseByToken(token);
+      if (cloudCase) {
+        matched = cloudCase;
+        setCases((prev) => [cloudCase, ...prev.filter((c) => c.id !== cloudCase.id)]);
+      }
+    }
+
     if (matched) {
       setClientTokenState(matched.token);
       if (typeof window !== 'undefined') {
@@ -134,12 +177,27 @@ export function useAppStore() {
     return null;
   };
 
-  // CLIENT LOGIN: By 10-digit Phone Number (Elderly Friendly)
-  const clientLoginWithPhone = (phone: string): SurgeryCase | null => {
+  // CLIENT LOGIN: By 10-digit Phone Number (Elderly Friendly with Cloud Support)
+  const clientLoginWithPhone = async (phone: string): Promise<SurgeryCase | null> => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
-    const matched = cases.find(
+    let matched = cases.find(
       (c) => c.phoneNumber.replace(/[^0-9]/g, '') === cleanPhone
     );
+
+    if (!matched && dbService.isAvailable()) {
+      const cloudCase = await dbService.findCaseByPhone(cleanPhone);
+      if (cloudCase) {
+        matched = cloudCase;
+        setCases((prev) => {
+          const updated = [cloudCase, ...prev.filter((c) => c.id !== cloudCase.id)];
+          if (typeof window !== 'undefined') {
+            localStorage.setItem(STORAGE_KEY_CASES, JSON.stringify(updated));
+          }
+          return updated;
+        });
+      }
+    }
+
     if (matched) {
       setClientTokenState(matched.token);
       if (typeof window !== 'undefined') {
@@ -204,6 +262,12 @@ export function useAppStore() {
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY_CASES, JSON.stringify(updatedCases));
       localStorage.setItem(STORAGE_KEY_PATIENTS, JSON.stringify(updatedPatients));
+    }
+
+    if (dbService.isAvailable()) {
+      dbService.createCase(newCase, newPatient).catch((err) => {
+        console.error('Failed to sync case to Supabase:', err);
+      });
     }
 
     addAuditLog(
@@ -271,6 +335,12 @@ export function useAppStore() {
     setReports(updatedReports);
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(updatedReports));
+    }
+
+    if (dbService.isAvailable()) {
+      dbService.submitReport(newReport).catch((err) => {
+        console.error('Failed to sync report to Supabase:', err);
+      });
     }
 
     addAuditLog(
@@ -364,6 +434,12 @@ export function useAppStore() {
     setReports(newReports);
     if (typeof window !== 'undefined') {
       localStorage.setItem(STORAGE_KEY_REPORTS, JSON.stringify(newReports));
+    }
+
+    if (dbService.isAvailable()) {
+      dbService.updateReport(reportId, updatedReport).catch((err) => {
+        console.error('Failed to update report in Supabase:', err);
+      });
     }
 
     addAuditLog(
