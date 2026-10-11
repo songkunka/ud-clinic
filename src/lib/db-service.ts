@@ -72,6 +72,10 @@ export const dbService = {
       }
 
       for (const r of reports) {
+        const internalNotesText = Array.isArray(r.internalNotes)
+          ? r.internalNotes.join('\n')
+          : (r.internalNotes || '');
+
         const { error } = await sb.from('daily_reports').upsert({
           id: r.id,
           case_id: r.caseId,
@@ -86,10 +90,9 @@ export const dbService = {
           submitted_at: r.submittedAt,
           photos: r.photos,
           symptoms: r.symptomAnswers,
-          review_history: r.reviewHistory || [],
-          internal_notes: r.internalNotes || [],
+          review_notes: r.reviewHistory || [],
+          internal_clinical_notes: internalNotesText,
           customer_message: r.latestCustomerMessage || '',
-          is_urgent: r.isUrgent,
         });
         if (!error) syncedReports++;
       }
@@ -170,12 +173,22 @@ export const dbService = {
           numbnessOrTightness: 'normal_tight',
           hasConcerningSymptoms: false,
         },
-        internalNotes: row.internal_notes || [],
+        internalNotes: Array.isArray(row.internal_notes)
+          ? row.internal_notes
+          : row.internal_clinical_notes
+          ? [row.internal_clinical_notes]
+          : [],
         latestCustomerMessage: row.customer_message || '',
-        reviewHistory: row.review_history || [],
-        isUrgent: row.is_urgent || false,
+        reviewHistory: row.review_notes || row.review_history || [],
+        isUrgent:
+          row.is_urgent ||
+          Boolean(
+            row.symptoms?.painScore >= 8 ||
+              row.symptoms?.bleedingOrDischarge === 'heavy_fresh' ||
+              row.symptoms?.hasConcerningSymptoms
+          ),
         createdAt: row.created_at || new Date().toISOString(),
-        updatedAt: row.updated_at || new Date().toISOString(),
+        updatedAt: row.created_at || new Date().toISOString(),
       }));
     } catch (err) {
       console.error('Error fetching reports from Supabase:', err);
@@ -295,6 +308,10 @@ export const dbService = {
     const sb = getSupabase();
     if (!sb) return false;
     try {
+      const internalNotesText = Array.isArray(report.internalNotes)
+        ? report.internalNotes.join('\n')
+        : (report.internalNotes || '');
+
       const { error } = await sb.from('daily_reports').upsert({
         id: report.id,
         case_id: report.caseId,
@@ -309,10 +326,9 @@ export const dbService = {
         submitted_at: report.submittedAt,
         photos: report.photos,
         symptoms: report.symptomAnswers,
-        review_history: report.reviewHistory || [],
-        internal_notes: report.internalNotes || [],
+        review_notes: report.reviewHistory || [],
+        internal_clinical_notes: internalNotesText,
         customer_message: report.latestCustomerMessage || '',
-        is_urgent: report.isUrgent,
       });
 
       if (error) {
@@ -336,11 +352,17 @@ export const dbService = {
       const payload: Record<string, unknown> = {};
       if (updates.status) payload.status = updates.status;
       if (updates.statusLabelThai) payload.status_label_thai = updates.statusLabelThai;
-      if (updates.internalNotes !== undefined)
-        payload.internal_notes = updates.internalNotes;
-      if (updates.latestCustomerMessage !== undefined)
+      if (updates.internalNotes !== undefined) {
+        payload.internal_clinical_notes = Array.isArray(updates.internalNotes)
+          ? updates.internalNotes.join('\n')
+          : String(updates.internalNotes || '');
+      }
+      if (updates.latestCustomerMessage !== undefined) {
         payload.customer_message = updates.latestCustomerMessage;
-      if (updates.reviewHistory) payload.review_history = updates.reviewHistory;
+      }
+      if (updates.reviewHistory) {
+        payload.review_notes = updates.reviewHistory;
+      }
 
       const { error } = await sb
         .from('daily_reports')
