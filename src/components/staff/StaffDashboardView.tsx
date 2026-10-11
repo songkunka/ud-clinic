@@ -23,7 +23,10 @@ import {
   User,
   ShieldCheck,
   ExternalLink,
+  Database,
 } from 'lucide-react';
+import { DatabaseConfigModal } from '@/components/common/DatabaseConfigModal';
+import { isSupabaseConfigured } from '@/lib/supabase';
 
 export function StaffDashboardView() {
   const {
@@ -32,6 +35,8 @@ export function StaffDashboardView() {
     createNewCase,
     performReviewAction,
   } = useAppStore();
+
+  const [showDbModal, setShowDbModal] = useState(false);
 
   const [activeTab, setActiveTab] = useState<
     'all' | 'pending' | 'referred' | 'more_info' | 'urgent' | 'reviewed'
@@ -127,6 +132,19 @@ export function StaffDashboardView() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* Cloud Database Status Button */}
+          <button
+            onClick={() => setShowDbModal(true)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+              isSupabaseConfigured()
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
+                : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 animate-pulse'
+            }`}
+          >
+            <Database className="w-4 h-4" />
+            <span>{isSupabaseConfigured() ? 'Cloud: เชื่อมต่อแล้ว' : 'ต่อ Supabase Cloud'}</span>
+          </button>
+
           {/* Register New Case Button */}
           <button
             onClick={() => {
@@ -179,6 +197,29 @@ export function StaffDashboardView() {
           </div>
         </div>
       </div>
+
+      {/* Offline Alert Banner if Supabase not configured */}
+      {!isSupabaseConfigured() && (
+        <div className="p-4 bg-amber-50/90 border border-amber-300 rounded-2xl flex flex-wrap items-center justify-between gap-3 text-xs text-amber-900 shadow-xs animate-in fade-in">
+          <div className="flex items-center gap-2.5">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div>
+              <p className="font-bold text-amber-950 text-xs">
+                ระบบกำลังทำงานในโหมด Offline (บันทึกเฉพาะในเบราว์เซอร์เครื่องนี้)
+              </p>
+              <p className="text-[11px] text-amber-800">
+                ข้อมูลคนไข้ที่ลงทะเบียนไว้ยังไม่ได้ซิงค์ไปที่ Supabase Cloud ทำให้เมื่อเปิดบนมือถือจะไม่พบข้อมูล
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setShowDbModal(true)}
+            className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl shadow-xs transition-colors cursor-pointer"
+          >
+            ใส่ API Keys เพื่อเชื่อมต่อและซิงค์ข้อมูลขึ้น Supabase
+          </button>
+        </div>
+      )}
 
       {/* Metric Cards */}
       <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
@@ -656,6 +697,12 @@ export function StaffDashboardView() {
           onPerformAction={(act) => performReviewAction(selectedReport.id, act)}
         />
       )}
+
+      {/* Database Setup Modal */}
+      <DatabaseConfigModal
+        isOpen={showDbModal}
+        onClose={() => setShowDbModal(false)}
+      />
     </div>
   );
 }

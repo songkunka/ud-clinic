@@ -1,15 +1,111 @@
-import { supabase, isSupabaseConfigured } from './supabase';
+import { getSupabase, isSupabaseConfigured } from './supabase';
 import { SurgeryCase, Patient, DailyReport } from './types';
 
 export const dbService = {
   isAvailable(): boolean {
-    return isSupabaseConfigured && supabase !== null;
+    return isSupabaseConfigured() && getSupabase() !== null;
+  },
+
+  async testConnection(): Promise<{ success: boolean; message: string }> {
+    const sb = getSupabase();
+    if (!sb) {
+      return {
+        success: false,
+        message: 'ยังไม่ได้ระบุ Project URL หรือ anon public API key',
+      };
+    }
+    try {
+      const { error } = await sb.from('patients').select('id').limit(1);
+      if (error) {
+        return {
+          success: false,
+          message: `Supabase Error (${error.code || 'FAIL'}): ${error.message}. กรุณาตรวจสอบว่าได้ Run สคริปต์ SQL ใน SQL Editor แล้วหรือไม่`,
+        };
+      }
+      return { success: true, message: 'เชื่อมต่อฐานข้อมูล Supabase สำเร็จแล้ว 100%' };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'ไม่สามารถเชื่อมต่อได้';
+      return { success: false, message: msg };
+    }
+  },
+
+  async syncAllLocalToCloud(
+    cases: SurgeryCase[],
+    patients: Patient[],
+    reports: DailyReport[]
+  ): Promise<{ success: boolean; syncedCases: number; syncedReports: number; error?: string }> {
+    const sb = getSupabase();
+    if (!sb) {
+      return { success: false, syncedCases: 0, syncedReports: 0, error: 'ยังไม่ได้เชื่อมต่อ Supabase' };
+    }
+
+    let syncedCases = 0;
+    let syncedReports = 0;
+
+    try {
+      for (const p of patients) {
+        await sb.from('patients').upsert({
+          id: p.id,
+          hn: p.hn,
+          display_name: p.displayName,
+          phone_number: p.phoneNumber,
+          consent_accepted: true,
+        });
+      }
+
+      for (const c of cases) {
+        const { error } = await sb.from('surgery_cases').upsert({
+          id: c.id,
+          patient_id: c.patientId,
+          patient_name: c.patientName,
+          hn: c.hn,
+          phone_number: c.phoneNumber,
+          token: c.token,
+          service_type: c.serviceType,
+          surgeon_name: c.surgeonName,
+          surgery_date: c.surgeryDate,
+          follow_up_start_date: c.followUpStartDate,
+          case_status: c.caseStatus,
+          notes: c.notes,
+        });
+        if (!error) syncedCases++;
+      }
+
+      for (const r of reports) {
+        const { error } = await sb.from('daily_reports').upsert({
+          id: r.id,
+          case_id: r.caseId,
+          patient_id: r.patientId,
+          patient_name: r.patientName,
+          hn: r.hn,
+          surgery_date: r.surgeryDate,
+          report_date: r.reportDate,
+          post_op_day: r.postOpDay,
+          status: r.status,
+          status_label_thai: r.statusLabelThai,
+          submitted_at: r.submittedAt,
+          photos: r.photos,
+          symptoms: r.symptomAnswers,
+          review_history: r.reviewHistory || [],
+          internal_notes: r.internalNotes || [],
+          customer_message: r.latestCustomerMessage || '',
+          is_urgent: r.isUrgent,
+        });
+        if (!error) syncedReports++;
+      }
+
+      return { success: true, syncedCases, syncedReports };
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการซิงค์';
+      return { success: false, syncedCases, syncedReports, error: msg };
+    }
   },
 
   async getAllCases(): Promise<SurgeryCase[]> {
-    if (!this.isAvailable() || !supabase) return [];
+    const sb = getSupabase();
+    if (!sb) return [];
     try {
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from('surgery_cases')
         .select('*')
         .order('created_at', { ascending: false });
@@ -40,9 +136,10 @@ export const dbService = {
   },
 
   async getAllReports(): Promise<DailyReport[]> {
-    if (!this.isAvailable() || !supabase) return [];
+    const sb = getSupabase();
+    if (!sb) return [];
     try {
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from('daily_reports')
         .select('*')
         .order('created_at', { ascending: false });
@@ -62,7 +159,7 @@ export const dbService = {
         reportDate: row.report_date,
         postOpDay: row.post_op_day,
         status: row.status,
-        statusLabelThai: row.status_label_thai,
+        statusLabelThai: row.status_label_thai || 'ส่งรายงานแล้ว',
         submittedAt: row.submitted_at,
         photos: row.photos || [],
         symptomAnswers: row.symptoms || {
@@ -87,10 +184,11 @@ export const dbService = {
   },
 
   async createCase(newCase: SurgeryCase, newPatient: Patient): Promise<boolean> {
-    if (!this.isAvailable() || !supabase) return false;
+    const sb = getSupabase();
+    if (!sb) return false;
     try {
       // 1. Upsert Patient
-      const { error: patientErr } = await supabase.from('patients').upsert({
+      const { error: patientErr } = await sb.from('patients').upsert({
         id: newPatient.id,
         hn: newPatient.hn,
         display_name: newPatient.displayName,
@@ -103,7 +201,7 @@ export const dbService = {
       }
 
       // 2. Upsert Surgery Case
-      const { error: caseErr } = await supabase.from('surgery_cases').upsert({
+      const { error: caseErr } = await sb.from('surgery_cases').upsert({
         id: newCase.id,
         patient_id: newCase.patientId,
         patient_name: newCase.patientName,
@@ -131,10 +229,11 @@ export const dbService = {
   },
 
   async findCaseByPhone(phone: string): Promise<SurgeryCase | null> {
-    if (!this.isAvailable() || !supabase) return null;
+    const sb = getSupabase();
+    if (!sb) return null;
     try {
       const cleanPhone = phone.trim().replace(/[^0-9]/g, '');
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from('surgery_cases')
         .select('*')
         .eq('phone_number', cleanPhone)
@@ -162,9 +261,10 @@ export const dbService = {
   },
 
   async findCaseByToken(token: string): Promise<SurgeryCase | null> {
-    if (!this.isAvailable() || !supabase) return null;
+    const sb = getSupabase();
+    if (!sb) return null;
     try {
-      const { data, error } = await supabase
+      const { data, error } = await sb
         .from('surgery_cases')
         .select('*')
         .eq('token', token)
@@ -192,9 +292,10 @@ export const dbService = {
   },
 
   async submitReport(report: DailyReport): Promise<boolean> {
-    if (!this.isAvailable() || !supabase) return false;
+    const sb = getSupabase();
+    if (!sb) return false;
     try {
-      const { error } = await supabase.from('daily_reports').upsert({
+      const { error } = await sb.from('daily_reports').upsert({
         id: report.id,
         case_id: report.caseId,
         patient_id: report.patientId,
@@ -229,7 +330,8 @@ export const dbService = {
     reportId: string,
     updates: Partial<DailyReport>
   ): Promise<boolean> {
-    if (!this.isAvailable() || !supabase) return false;
+    const sb = getSupabase();
+    if (!sb) return false;
     try {
       const payload: Record<string, unknown> = {};
       if (updates.status) payload.status = updates.status;
@@ -240,7 +342,7 @@ export const dbService = {
         payload.customer_message = updates.latestCustomerMessage;
       if (updates.reviewHistory) payload.review_history = updates.reviewHistory;
 
-      const { error } = await supabase
+      const { error } = await sb
         .from('daily_reports')
         .update(payload)
         .eq('id', reportId);
