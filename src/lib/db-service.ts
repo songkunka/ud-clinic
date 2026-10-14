@@ -613,4 +613,166 @@ export const dbService = {
     }
     return true;
   },
+
+  async savePhotoQualityEvaluations(
+    submissionId: string,
+    evaluations: PhotoQualityEvaluation[]
+  ): Promise<boolean> {
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        const rows = evaluations.map((e) => ({
+          id: e.id,
+          submission_id: submissionId,
+          angle_code: e.angleCode,
+          quality_status: e.qualityStatus,
+          retake_reason: e.retakeReason || null,
+          reviewed_by: e.reviewedBy,
+          reviewed_at: e.reviewedAt,
+        }));
+        await sb.from('photo_quality_evaluations').upsert(rows);
+      } catch (err) {
+        console.warn('Could not upsert photo_quality_evaluations to Supabase:', err);
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const key = `ud_evaluations_${submissionId}`;
+        localStorage.setItem(key, JSON.stringify(evaluations));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  },
+
+  async getPhotoQualityEvaluations(
+    submissionId: string
+  ): Promise<PhotoQualityEvaluation[]> {
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        const { data, error } = await sb
+          .from('photo_quality_evaluations')
+          .select('*')
+          .eq('submission_id', submissionId);
+
+        if (!error && data && data.length > 0) {
+          return data.map((row) => ({
+            id: row.id,
+            submissionId: row.submission_id,
+            angleCode: row.angle_code,
+            qualityStatus: row.quality_status,
+            retakeReason: row.retake_reason || undefined,
+            reviewedBy: row.reviewed_by,
+            reviewedAt: row.reviewed_at,
+          }));
+        }
+      } catch {
+        // fallback to localStorage
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const key = `ud_evaluations_${submissionId}`;
+        const stored = localStorage.getItem(key);
+        if (stored) return JSON.parse(stored);
+      } catch {
+        // ignore
+      }
+    }
+    return [];
+  },
+
+  async logClinicalAudit(
+    entry: Omit<ClinicalAuditLog, 'id' | 'createdAt'>
+  ): Promise<boolean> {
+    const audit: ClinicalAuditLog = {
+      ...entry,
+      id: `audit_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      createdAt: new Date().toISOString(),
+    };
+
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        await sb.from('clinical_audit_logs').insert({
+          id: audit.id,
+          actor_name: audit.actorName,
+          actor_role: audit.actorRole,
+          action: audit.action,
+          resource_type: audit.resourceType,
+          resource_id: audit.resourceId,
+          changes: audit.changes || {},
+          ip_address: audit.ipAddress || null,
+        });
+      } catch (err) {
+        console.warn('Could not write clinical_audit_logs to Supabase:', err);
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const existing = await this.getClinicalAuditLogs();
+        localStorage.setItem(
+          'ud_clinical_audit_logs',
+          JSON.stringify([audit, ...existing.slice(0, 100)])
+        );
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return true;
+  },
+
+  async getClinicalAuditLogs(resourceId?: string): Promise<ClinicalAuditLog[]> {
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        let query = sb
+          .from('clinical_audit_logs')
+          .select('*')
+          .order('created_at', { ascending: false });
+
+        if (resourceId) {
+          query = query.eq('resource_id', resourceId);
+        }
+
+        const { data, error } = await query.limit(50);
+        if (!error && data) {
+          return data.map((row) => ({
+            id: row.id,
+            actorName: row.actor_name,
+            actorRole: row.actor_role,
+            action: row.action,
+            resourceType: row.resource_type,
+            resourceId: row.resource_id,
+            changes: row.changes,
+            ipAddress: row.ip_address,
+            createdAt: row.created_at,
+          }));
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ud_clinical_audit_logs');
+        if (stored) {
+          const list: ClinicalAuditLog[] = JSON.parse(stored);
+          if (resourceId) return list.filter((l) => l.resourceId === resourceId);
+          return list;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return [];
+  },
 };

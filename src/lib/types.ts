@@ -129,6 +129,10 @@ export interface DailyReport {
   internalNotes?: string[];
   reviewHistory: ReviewAction[];
   isUrgent: boolean;
+  photoEvaluations?: PhotoQualityEvaluation[];
+  escalationPriority?: 'routine' | 'urgent' | 'emergency';
+  escalationReason?: string;
+  doctorClinicalOrders?: string;
   createdAt: string;
   updatedAt: string;
 }

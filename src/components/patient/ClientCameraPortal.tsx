@@ -20,6 +20,7 @@ import {
   AlertCircle,
   LogOut,
 } from 'lucide-react';
+import { dbService } from '@/lib/db-service';
 
 export function ClientCameraPortal() {
   const {
@@ -54,6 +55,10 @@ export function ClientCameraPortal() {
   const [submittedReport, setSubmittedReport] = useState<DailyReport | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Per-Angle Retake Guidance
+  const [retakeAngles, setRetakeAngles] = useState<string[]>([]);
+  const [retakeAdvice, setRetakeAdvice] = useState<string | null>(null);
+
   // Symptoms values
   const [painScore, setPainScore] = useState<number>(2);
   const [swellingLevel, setSwellingLevel] = useState<'decreasing' | 'same' | 'increasing'>('same');
@@ -67,6 +72,29 @@ export function ClientCameraPortal() {
 
   const currentAngle = angles[currentAngleIndex];
   const latestReport = activeCaseReports[0] || null;
+
+  // Track retake requests from medical team
+  useEffect(() => {
+    if (latestReport && latestReport.status === 'more_info_requested') {
+      dbService.getPhotoQualityEvaluations(latestReport.id).then((evals) => {
+        const needed = evals
+          .filter((e) => e.qualityStatus === 'retake_required')
+          .map((e) => e.angleCode);
+        setRetakeAngles(needed);
+        setRetakeAdvice(latestReport.latestCustomerMessage || null);
+
+        if (needed.length > 0) {
+          const firstIdx = angles.findIndex((a) => needed.includes(a.key));
+          if (firstIdx !== -1) {
+            setCurrentAngleIndex(firstIdx);
+          }
+        }
+      });
+    } else {
+      setRetakeAngles([]);
+      setRetakeAdvice(null);
+    }
+  }, [latestReport, angles]);
 
   // Post-op day calculation
   const postOpDay = activeClientCase
@@ -464,8 +492,29 @@ export function ClientCameraPortal() {
         </div>
       </div>
 
+      {/* Retake Notification Banner if Doctor requested retake */}
+      {retakeAngles.length > 0 && (
+        <div className="absolute top-12 inset-x-3 z-30 pointer-events-auto">
+          <div className="bg-amber-950/90 border border-amber-500/50 rounded-2xl p-2.5 shadow-xl backdrop-blur-md text-white text-xs space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-amber-300 text-[11px]">
+              <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+              <span>คุณหมอขอให้ถ่ายซ่อม ({retakeAngles.length} มุม):</span>
+            </div>
+            {retakeAdvice && (
+              <p className="text-[10px] text-amber-100/90 pl-5 italic line-clamp-2">
+                &ldquo;{retakeAdvice}&rdquo;
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ANGLE TITLE & SUBTLE TIP (Minimal 4 words) */}
-      <div className="absolute top-13 inset-x-0 z-20 flex flex-col items-center pointer-events-none">
+      <div
+        className={`absolute ${
+          retakeAngles.length > 0 ? 'top-26' : 'top-13'
+        } inset-x-0 z-20 flex flex-col items-center pointer-events-none transition-all`}
+      >
         <div className="bg-black/60 backdrop-blur-md px-3.5 py-1 rounded-full border border-white/10 text-center shadow-lg">
           <span className="text-xs font-bold text-blue-400">
             {currentAngleIndex + 1}/{angles.length} {currentAngle.labelThai}
@@ -554,6 +603,7 @@ export function ClientCameraPortal() {
           {angles.map((ang, idx) => {
             const isTaken = capturedPhotos.some((p) => p.angleKey === ang.key);
             const isCurrent = idx === currentAngleIndex;
+            const isRetakeRequested = retakeAngles.includes(ang.key);
             return (
               <button
                 key={ang.key}
@@ -565,12 +615,18 @@ export function ClientCameraPortal() {
                 className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
                   isCurrent
                     ? 'bg-blue-600 text-white ring-2 ring-blue-400 shadow-md scale-105'
+                    : isRetakeRequested
+                    ? 'bg-amber-950/90 text-amber-300 border border-amber-500 animate-pulse'
                     : isTaken
                     ? 'bg-emerald-950/80 text-emerald-400 border border-emerald-700/60'
                     : 'bg-white/10 text-slate-400 hover:text-white'
                 }`}
               >
-                {isTaken && <Check className="w-3 h-3 text-emerald-400" />}
+                {isTaken ? (
+                  <Check className="w-3 h-3 text-emerald-400" />
+                ) : isRetakeRequested ? (
+                  <span className="text-[9px] font-black text-amber-400">⚠️</span>
+                ) : null}
                 <span>{ang.shortLabel}</span>
               </button>
             );
