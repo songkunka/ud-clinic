@@ -10,6 +10,7 @@ import {
   Clock,
   UserPlus,
   PhoneCall,
+  Phone,
   CheckCircle2,
   Search,
   Columns,
@@ -26,6 +27,9 @@ import {
   Database,
 } from 'lucide-react';
 import { DatabaseConfigModal } from '@/components/common/DatabaseConfigModal';
+import { ContactLogModal } from './ContactLogModal';
+import { FollowupSchedule } from '@/lib/types';
+import { dbService } from '@/lib/db-service';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
 export function StaffDashboardView() {
@@ -39,11 +43,21 @@ export function StaffDashboardView() {
   const [showDbModal, setShowDbModal] = useState(false);
 
   const [activeTab, setActiveTab] = useState<
-    'all' | 'pending' | 'referred' | 'more_info' | 'urgent' | 'reviewed'
-  >('all');
+    'all' | 'pending' | 'due_overdue' | 'referred' | 'more_info' | 'urgent' | 'reviewed'
+  >('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedReport, setSelectedReport] = useState<DailyReport | null>(null);
   const [viewMode, setViewMode] = useState<'queue' | 'cases' | 'compare'>('queue');
+  const [dueOverdueSchedules, setDueOverdueSchedules] = useState<FollowupSchedule[]>([]);
+  const [selectedContactCase, setSelectedContactCase] = useState<{
+    patientName: string;
+    hn: string;
+    phoneNumber: string;
+    caseId: string;
+    patientId: string;
+    dayLabel?: string;
+  } | null>(null);
+  const [copiedScheduleToken, setCopiedScheduleToken] = useState<string | null>(null);
 
   // Register New Case Modal State
   const [showNewCaseModal, setShowNewCaseModal] = useState(false);
@@ -56,9 +70,22 @@ export function StaffDashboardView() {
   const [createdCaseResult, setCreatedCaseResult] = useState<SurgeryCase | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
+  const refreshOverdueSchedules = async () => {
+    try {
+      const list = await dbService.getDueAndOverdueSchedules();
+      setDueOverdueSchedules(list);
+    } catch (err) {
+      console.error('Error loading due/overdue schedules:', err);
+    }
+  };
+
   useEffect(() => {
     setSurgeryDate(new Date().toISOString().split('T')[0]);
   }, []);
+
+  useEffect(() => {
+    refreshOverdueSchedules();
+  }, [cases, reports]);
 
   // Metrics
   const countPending = reports.filter(
@@ -91,6 +118,19 @@ export function StaffDashboardView() {
     return true;
   });
 
+  // Filtered schedules for due/overdue follow-up queue
+  const filteredSchedules = dueOverdueSchedules.filter((s) => {
+    if (!searchQuery) return true;
+    const q = searchQuery.toLowerCase();
+    return (
+      (s.patientName && s.patientName.toLowerCase().includes(q)) ||
+      (s.hn && s.hn.toLowerCase().includes(q)) ||
+      (s.phoneNumber && s.phoneNumber.toLowerCase().includes(q)) ||
+      (s.dayLabel && s.dayLabel.toLowerCase().includes(q)) ||
+      (s.procedureName && s.procedureName.toLowerCase().includes(q))
+    );
+  });
+
   const handleCreateCaseSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!patientName.trim() || !hn.trim() || !phoneNumber.trim()) {
@@ -108,6 +148,7 @@ export function StaffDashboardView() {
     });
 
     setCreatedCaseResult(created);
+    refreshOverdueSchedules();
   };
 
   const copyMagicLink = (token: string) => {
@@ -233,17 +274,20 @@ export function StaffDashboardView() {
       )}
 
       {/* Metric Cards */}
-      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         <div
-          onClick={() => setActiveTab('pending')}
+          onClick={() => {
+            setViewMode('queue');
+            setActiveTab('pending');
+          }}
           className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
-            activeTab === 'pending'
+            activeTab === 'pending' && viewMode === 'queue'
               ? 'bg-blue-50/80 border-blue-400 ring-2 ring-blue-500/20'
               : 'bg-white border-slate-200 hover:border-slate-300'
           }`}
         >
           <div className="flex items-center justify-between text-xs text-blue-700 font-semibold mb-1">
-            <span>รอตรวจวันนี้</span>
+            <span>รอตรวจภาพ</span>
             <Clock className="w-4 h-4" />
           </div>
           <div className="text-2xl font-black text-slate-900">{countPending}</div>
@@ -251,9 +295,31 @@ export function StaffDashboardView() {
         </div>
 
         <div
-          onClick={() => setActiveTab('urgent')}
+          onClick={() => {
+            setViewMode('queue');
+            setActiveTab('due_overdue');
+          }}
           className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
-            activeTab === 'urgent'
+            activeTab === 'due_overdue' && viewMode === 'queue'
+              ? 'bg-amber-500/15 border-amber-500 ring-2 ring-amber-500/20 shadow-xs'
+              : 'bg-white border-slate-200 hover:border-amber-300'
+          }`}
+        >
+          <div className="flex items-center justify-between text-xs text-amber-800 font-semibold mb-1">
+            <span>ค้างส่ง/ถึงกำหนด</span>
+            <AlertTriangle className="w-4 h-4 text-amber-600" />
+          </div>
+          <div className="text-2xl font-black text-amber-600">{dueOverdueSchedules.length}</div>
+          <div className="text-[10px] text-slate-500 mt-0.5">ถึงเวลาแต่ยังไม่ส่ง</div>
+        </div>
+
+        <div
+          onClick={() => {
+            setViewMode('queue');
+            setActiveTab('urgent');
+          }}
+          className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
+            activeTab === 'urgent' && viewMode === 'queue'
               ? 'bg-red-50/80 border-red-400 ring-2 ring-red-500/20'
               : 'bg-white border-slate-200 hover:border-slate-300'
           }`}
@@ -267,9 +333,12 @@ export function StaffDashboardView() {
         </div>
 
         <div
-          onClick={() => setActiveTab('referred')}
+          onClick={() => {
+            setViewMode('queue');
+            setActiveTab('referred');
+          }}
           className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
-            activeTab === 'referred'
+            activeTab === 'referred' && viewMode === 'queue'
               ? 'bg-purple-50/80 border-purple-400 ring-2 ring-purple-500/20'
               : 'bg-white border-slate-200 hover:border-slate-300'
           }`}
@@ -283,9 +352,12 @@ export function StaffDashboardView() {
         </div>
 
         <div
-          onClick={() => setActiveTab('more_info')}
+          onClick={() => {
+            setViewMode('queue');
+            setActiveTab('more_info');
+          }}
           className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
-            activeTab === 'more_info'
+            activeTab === 'more_info' && viewMode === 'queue'
               ? 'bg-amber-50/80 border-amber-400 ring-2 ring-amber-500/20'
               : 'bg-white border-slate-200 hover:border-slate-300'
           }`}
@@ -299,9 +371,12 @@ export function StaffDashboardView() {
         </div>
 
         <div
-          onClick={() => setActiveTab('reviewed')}
+          onClick={() => {
+            setViewMode('queue');
+            setActiveTab('reviewed');
+          }}
           className={`p-3.5 rounded-2xl border transition-all cursor-pointer ${
-            activeTab === 'reviewed'
+            activeTab === 'reviewed' && viewMode === 'queue'
               ? 'bg-emerald-50/80 border-emerald-400 ring-2 ring-emerald-500/20'
               : 'bg-white border-slate-200 hover:border-slate-300'
           }`}
@@ -395,6 +470,7 @@ export function StaffDashboardView() {
               {[
                 { id: 'all', label: `ทั้งหมด (${reports.length})` },
                 { id: 'pending', label: `รอตรวจ (${countPending})` },
+                { id: 'due_overdue', label: `⚠️ ค้างส่ง/ถึงกำหนด (${dueOverdueSchedules.length})` },
                 { id: 'urgent', label: `เร่งด่วน (${countUrgent})` },
                 { id: 'referred', label: `ส่งต่อแพทย์ (${countReferred})` },
                 { id: 'more_info', label: `ขอข้อมูลเพิ่ม (${countMoreInfo})` },
@@ -405,8 +481,12 @@ export function StaffDashboardView() {
                   onClick={() => setActiveTab(tab.id as typeof activeTab)}
                   className={`px-3 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
                     activeTab === tab.id
-                      ? 'bg-blue-600 text-white shadow-xs'
-                      : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
+                      ? tab.id === 'due_overdue'
+                        ? 'bg-amber-500 text-white shadow-xs'
+                        : 'bg-blue-600 text-white shadow-xs'
+                      : tab.id === 'due_overdue' && dueOverdueSchedules.length > 0
+                        ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
                 >
                   {tab.label}
@@ -425,7 +505,136 @@ export function StaffDashboardView() {
             </div>
           </div>
 
-          {filteredReports.length === 0 ? (
+          {activeTab === 'due_overdue' ? (
+            filteredSchedules.length === 0 ? (
+              <div className="text-center py-16 text-slate-400 space-y-2">
+                <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500" />
+                <p className="text-sm font-semibold text-slate-700">ไม่มีเคสที่ค้างส่งภาพในขณะนี้</p>
+                <p className="text-xs">คนไข้ทุกคนส่งภาพครบถ้วนตามโปรโตคอลกำหนด</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
+                      <th className="p-3">คนไข้ & HN</th>
+                      <th className="p-3">หัตถการ</th>
+                      <th className="p-3">รอบติดตาม</th>
+                      <th className="p-3">วันที่ต้องส่ง</th>
+                      <th className="p-3">เบอร์ติดต่อ</th>
+                      <th className="p-3">สถานะติดตาม</th>
+                      <th className="p-3 text-right">ดำเนินการ</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {filteredSchedules.map((s) => {
+                      const isOverdue = s.scheduleStatus === 'overdue';
+                      return (
+                        <tr key={s.id} className="hover:bg-amber-50/40">
+                          <td className="p-3">
+                            <div className="font-bold text-slate-900">{s.patientName || 'คนไข้'}</div>
+                            <div className="text-[10px] font-mono text-slate-500">HN: {s.hn || '-'}</div>
+                          </td>
+
+                          <td className="p-3 text-slate-600 max-w-[180px] truncate">
+                            <div className="font-medium text-slate-800">{s.procedureName || 'ศัลยกรรมตกแต่ง'}</div>
+                            <div className="text-[10px] text-slate-400">{s.surgeonName || ''}</div>
+                          </td>
+
+                          <td className="p-3">
+                            <span className={`inline-block px-2.5 py-0.5 rounded-md font-black text-xs ${
+                              isOverdue ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
+                            }`}>
+                              {s.dayLabel}
+                            </span>
+                          </td>
+
+                          <td className="p-3 text-slate-700 whitespace-nowrap font-medium">
+                            {s.scheduledDate}
+                          </td>
+
+                          <td className="p-3 whitespace-nowrap">
+                            {s.phoneNumber ? (
+                              <a
+                                href={`tel:${s.phoneNumber}`}
+                                className="text-blue-600 hover:underline font-mono font-medium flex items-center gap-1"
+                              >
+                                <Phone className="w-3 h-3 text-slate-400" />
+                                {s.phoneNumber}
+                              </a>
+                            ) : (
+                              <span className="text-slate-400">-</span>
+                            )}
+                          </td>
+
+                          <td className="p-3 whitespace-nowrap">
+                            {isOverdue ? (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                <AlertTriangle className="w-3 h-3 text-rose-500" />
+                                เกินกำหนดส่ง (Overdue)
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                <Clock className="w-3 h-3 text-amber-500" />
+                                ถึงกำหนดวันนี้ (Due)
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="p-3 text-right whitespace-nowrap">
+                            <div className="inline-flex items-center gap-1.5">
+                              <button
+                                onClick={() =>
+                                  setSelectedContactCase({
+                                    patientName: s.patientName || 'คนไข้',
+                                    hn: s.hn || '',
+                                    phoneNumber: s.phoneNumber || '',
+                                    caseId: s.caseId,
+                                    patientId: s.patientId,
+                                    dayLabel: s.dayLabel,
+                                  })
+                                }
+                                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs inline-flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                              >
+                                <PhoneCall className="w-3.5 h-3.5" />
+                                <span>บันทึกโทร</span>
+                              </button>
+
+                              {s.token && (
+                                <button
+                                  onClick={() => {
+                                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
+                                    const link = `${origin}/client?token=${s.token}`;
+                                    navigator.clipboard.writeText(link);
+                                    setCopiedScheduleToken(s.token || null);
+                                    setTimeout(() => setCopiedScheduleToken(null), 2000);
+                                  }}
+                                  className="px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors"
+                                  title="คัดลอกลิงก์ถ่ายภาพของคนไข้"
+                                >
+                                  {copiedScheduleToken === s.token ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                      <span className="text-emerald-700 font-bold">คัดลอกแล้ว</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Copy className="w-3.5 h-3.5 text-slate-500" />
+                                      <span>ลิงก์</span>
+                                    </>
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : filteredReports.length === 0 ? (
             <div className="text-center py-16 text-slate-400 space-y-2">
               <CheckCircle2 className="w-12 h-12 mx-auto text-slate-300" />
               <p className="text-sm font-semibold">ไม่มีรายงานที่ค้างตรวจในขณะนี้</p>
@@ -710,6 +919,21 @@ export function StaffDashboardView() {
         isOpen={showDbModal}
         onClose={() => setShowDbModal(false)}
       />
+
+      {/* Contact Log Tracking Modal */}
+      {selectedContactCase && (
+        <ContactLogModal
+          isOpen={!!selectedContactCase}
+          onClose={() => setSelectedContactCase(null)}
+          patientName={selectedContactCase.patientName}
+          hn={selectedContactCase.hn}
+          phoneNumber={selectedContactCase.phoneNumber}
+          caseId={selectedContactCase.caseId}
+          patientId={selectedContactCase.patientId}
+          dayLabel={selectedContactCase.dayLabel}
+          onLogSaved={refreshOverdueSchedules}
+        />
+      )}
     </div>
   );
 }

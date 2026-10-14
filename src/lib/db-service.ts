@@ -1,5 +1,15 @@
 import { getSupabase, isSupabaseConfigured } from './supabase';
-import { SurgeryCase, Patient, DailyReport } from './types';
+import {
+  SurgeryCase,
+  Patient,
+  DailyReport,
+  FollowupSchedule,
+  ScheduleStatus,
+  ClinicalTask,
+  ContactLog,
+  PhotoQualityEvaluation,
+  ClinicalAuditLog,
+} from './types';
 
 export const dbService = {
   isAvailable(): boolean {
@@ -378,5 +388,229 @@ export const dbService = {
       console.error('Error updating report in Supabase:', err);
       return false;
     }
+  },
+
+  // ============================================================================
+  // Clinical Operations: Follow-up Schedules, Overdue Queues & Contact Logs
+  // ============================================================================
+
+  getBangkokToday(): string {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'Asia/Bangkok',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  },
+
+  computeScheduleDate(baseDateStr: string, dayOffset: number): string {
+    const parts = baseDateStr.split('-').map(Number);
+    const d = new Date(parts[0], parts[1] - 1, parts[2] + dayOffset);
+    const year = d.getFullYear();
+    const month = String(d.getMonth() + 1).padStart(2, '0');
+    const day = String(d.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  },
+
+  async createFollowupSchedulesForCase(
+    caseId: string,
+    patientId: string,
+    surgeryDate: string
+  ): Promise<FollowupSchedule[]> {
+    const todayStr = this.getBangkokToday();
+    const schedules: FollowupSchedule[] = [];
+    const angles = ['frontal', 'right_45', 'left_45', 'right_profile', 'left_profile'];
+
+    for (let day = 1; day <= 14; day++) {
+      const scheduledDate = this.computeScheduleDate(surgeryDate, day);
+      let status: ScheduleStatus = 'upcoming';
+      if (scheduledDate < todayStr) {
+        status = 'overdue';
+      } else if (scheduledDate === todayStr) {
+        status = 'due';
+      }
+
+      schedules.push({
+        id: `sch_${caseId}_d${day}`,
+        caseId,
+        patientId,
+        scheduledDate,
+        dueAt: `${scheduledDate}T20:00:00+07:00`,
+        postOpDay: day,
+        dayLabel: `D+${day}`,
+        scheduleStatus: status,
+        requiredPhotoAngles: angles,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    // Try saving to Supabase if table exists
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        const rows = schedules.map((s) => ({
+          id: s.id,
+          case_id: s.caseId,
+          patient_id: s.patientId,
+          scheduled_date: s.scheduledDate,
+          due_at: s.dueAt,
+          post_op_day: s.postOpDay,
+          day_label: s.dayLabel,
+          schedule_status: s.scheduleStatus,
+          required_photo_angles: s.requiredPhotoAngles,
+        }));
+        await sb.from('followup_schedules').upsert(rows);
+      } catch (err) {
+        console.warn('Could not upsert to followup_schedules (table may be pending migration):', err);
+      }
+    }
+
+    // Fallback cache in localStorage
+    if (typeof window !== 'undefined') {
+      try {
+        const key = `ud_schedules_${caseId}`;
+        localStorage.setItem(key, JSON.stringify(schedules));
+      } catch {
+        // ignore storage errors
+      }
+    }
+
+    return schedules;
+  },
+
+  async getDueAndOverdueSchedules(): Promise<FollowupSchedule[]> {
+    const todayStr = this.getBangkokToday();
+    const cases = await this.getAllCases();
+    const reports = await this.getAllReports();
+    const result: FollowupSchedule[] = [];
+
+    for (const c of cases) {
+      // Find reports for this case
+      const caseReports = reports.filter((r: DailyReport) => r.caseId === c.id);
+      const angles = ['frontal', 'right_45', 'left_45', 'right_profile', 'left_profile'];
+
+      for (let day = 1; day <= 14; day++) {
+        const scheduledDate = this.computeScheduleDate(c.surgeryDate, day);
+        const existingReport = caseReports.find((r: DailyReport) => r.postOpDay === day);
+
+        let status: ScheduleStatus = 'upcoming';
+        if (existingReport) {
+          status = existingReport.status === 'reviewed' ? 'completed' : 'submitted';
+        } else if (scheduledDate < todayStr) {
+          status = 'overdue';
+        } else if (scheduledDate === todayStr) {
+          status = 'due';
+        }
+
+        // Only include due and overdue
+        if (status === 'due' || status === 'overdue') {
+          result.push({
+            id: `sch_${c.id}_d${day}`,
+            caseId: c.id,
+            patientId: c.patientId,
+            patientName: c.patientName,
+            hn: c.hn,
+            phoneNumber: c.phoneNumber,
+            token: c.token,
+            procedureName: c.serviceType,
+            surgeonName: c.surgeonName,
+            scheduledDate,
+            dueAt: `${scheduledDate}T20:00:00+07:00`,
+            postOpDay: day,
+            dayLabel: `D+${day}`,
+            scheduleStatus: status,
+            requiredPhotoAngles: angles,
+            createdAt: c.surgeryDate,
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+    }
+
+    // Sort: overdue first, then by date ascending
+    return result.sort((a, b) => {
+      if (a.scheduleStatus === 'overdue' && b.scheduleStatus !== 'overdue') return -1;
+      if (a.scheduleStatus !== 'overdue' && b.scheduleStatus === 'overdue') return 1;
+      return a.scheduledDate.localeCompare(b.scheduledDate);
+    });
+  },
+
+  async getContactLogs(caseId?: string): Promise<ContactLog[]> {
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        let query = sb.from('contact_logs').select('*').order('contacted_at', { ascending: false });
+        if (caseId) query = query.eq('case_id', caseId);
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          return data.map((row) => ({
+            id: row.id,
+            patientId: row.patient_id,
+            caseId: row.case_id,
+            taskId: row.task_id,
+            contactedAt: row.contacted_at,
+            contactedBy: row.contacted_by,
+            channel: row.channel,
+            contactOutcome: row.contact_outcome,
+            summary: row.summary,
+            nextAction: row.next_action,
+            nextActionDueAt: row.next_action_due_at,
+            createdAt: row.created_at,
+          }));
+        }
+      } catch {
+        // fallback
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const stored = localStorage.getItem('ud_contact_logs');
+        if (stored) {
+          const parsed: ContactLog[] = JSON.parse(stored);
+          if (caseId) return parsed.filter((l) => l.caseId === caseId);
+          return parsed;
+        }
+      } catch {
+        // ignore
+      }
+    }
+    return [];
+  },
+
+  async createContactLog(log: ContactLog): Promise<boolean> {
+    const sb = getSupabase();
+    if (sb) {
+      try {
+        const { error } = await sb.from('contact_logs').insert({
+          id: log.id,
+          patient_id: log.patientId,
+          case_id: log.caseId,
+          task_id: log.taskId || null,
+          contacted_at: log.contactedAt,
+          contacted_by: log.contactedBy,
+          channel: log.channel,
+          contact_outcome: log.contactOutcome,
+          summary: log.summary,
+          next_action: log.nextAction || null,
+          next_action_due_at: log.nextActionDueAt || null,
+        });
+        if (!error) return true;
+      } catch {
+        // fallback to localStorage
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      try {
+        const current = await this.getContactLogs();
+        localStorage.setItem('ud_contact_logs', JSON.stringify([log, ...current]));
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    return true;
   },
 };

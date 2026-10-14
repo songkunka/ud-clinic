@@ -154,3 +154,115 @@ export interface ReportingProtocol {
   angles: PhotoAngleConfig[];
   slaReviewMinutes: number;
 }
+
+export type ScheduleStatus =
+  | 'upcoming'
+  | 'due'
+  | 'overdue'
+  | 'submitted'
+  | 'completed'
+  | 'cancelled';
+
+export interface FollowupSchedule {
+  id: string;
+  caseId: string;
+  patientId: string;
+  patientName?: string;
+  hn?: string;
+  phoneNumber?: string;
+  token?: string;
+  procedureName?: string;
+  surgeonName?: string;
+  scheduledDate: string; // YYYY-MM-DD
+  dueAt: string; // ISO string
+  postOpDay: number;
+  dayLabel: string; // e.g. 'D+1', 'D+2'
+  scheduleStatus: ScheduleStatus;
+  requiredPhotoAngles: string[];
+  submissionId?: string;
+  completedAt?: string;
+  cancelReason?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ClinicalTaskType =
+  | 'review_submission'
+  | 'overdue_followup'
+  | 'request_retake'
+  | 'doctor_review';
+
+export type ClinicalTaskPriority = 'routine' | 'priority' | 'urgent' | 'emergency';
+
+export type ClinicalTaskStatus =
+  | 'open'
+  | 'in_progress'
+  | 'waiting_for_patient'
+  | 'waiting_for_doctor'
+  | 'closed';
+
+export interface ClinicalTask {
+  id: string;
+  caseId: string;
+  scheduleId?: string;
+  submissionId?: string;
+  patientName?: string;
+  hn?: string;
+  phoneNumber?: string;
+  taskType: ClinicalTaskType;
+  priority: ClinicalTaskPriority;
+  taskStatus: ClinicalTaskStatus;
+  assignedTo?: string;
+  assignedBy?: string;
+  assignedAt?: string;
+  escalationReason?: string;
+  resolutionSummary?: string;
+  closedAt?: string;
+  closedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ContactChannel = 'phone' | 'line' | 'sms';
+export type ContactOutcome =
+  | 'reached'
+  | 'no_answer'
+  | 'unreachable'
+  | 'callback_requested';
+
+export interface ContactLog {
+  id: string;
+  patientId: string;
+  caseId: string;
+  taskId?: string;
+  contactedAt: string;
+  contactedBy: string;
+  channel: ContactChannel;
+  contactOutcome: ContactOutcome;
+  summary: string;
+  nextAction?: string;
+  nextActionDueAt?: string;
+  createdAt: string;
+}
+
+export interface PhotoQualityEvaluation {
+  id: string;
+  submissionId: string;
+  angleCode: string;
+  qualityStatus: 'acceptable' | 'retake_required';
+  retakeReason?: string;
+  reviewedBy: string;
+  reviewedAt: string;
+}
+
+export interface ClinicalAuditLog {
+  id: string;
+  actorName: string;
+  actorRole: string;
+  action: string;
+  resourceType: string;
+  resourceId: string;
+  changes?: Record<string, unknown>;
+  ipAddress?: string;
+  createdAt: string;
+}
