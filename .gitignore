@@ -43,3 +43,6 @@ next-env.d.ts
 # patient photo uploads
 public/uploads/photos/*
 !public/uploads/photos/.gitkeep
+
+# binaries
+*.exe
