@@ -20,6 +20,7 @@ import {
   AlertCircle,
   FileCheck,
   UserCheck,
+  Copy,
 } from 'lucide-react';
 
 interface CaseReviewModalProps {
@@ -76,6 +77,34 @@ export function CaseReviewModal({
   const [requiresClinicVisit, setRequiresClinicVisit] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [copiedLineMsg, setCopiedLineMsg] = useState(false);
+
+  const handleCopyReviewForLine = () => {
+    const statusText =
+      actionType === 'reviewed'
+        ? 'ปกติเรียบร้อยดี (ตามเกณฑ์ฟื้นตัว)'
+        : actionType === 'request_more_info'
+        ? 'ขอความกรุณาถ่ายภาพซ่อมบางมุม'
+        : actionType === 'refer'
+        ? 'แพทย์กำลังตรวจประเมินเพิ่มเติม'
+        : 'ทีมพยาบาลกำลังประสานงาน';
+
+    const textToCopy = [
+      `🏥 UD CLINIC TORO — ผลการประเมินอาการหลังผ่าตัด`,
+      `👤 คนไข้: คุณ${report.patientName} (HN: ${report.hn})`,
+      `📅 ระยะเวลา: D+${report.postOpDay} หลังผ่าตัด`,
+      `🩺 สถานะการฟื้นตัว: ${statusText}`,
+      doctorOrders ? `📋 คำสั่งแพทย์: ${doctorOrders}` : '',
+      customerMessage ? `💬 คำแนะนำจากทีมดูแล: ${customerMessage}` : '',
+      `📞 ติดต่อสอบถาม/สายด่วนคลินิก: 081-456-7890`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedLineMsg(true);
+    setTimeout(() => setCopiedLineMsg(false), 2500);
+  };
 
   // Load saved evaluations
   useEffect(() => {
@@ -276,7 +305,21 @@ export function CaseReviewModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5">
+            <button
+              type="button"
+              onClick={handleCopyReviewForLine}
+              className="px-3 py-1.5 rounded-xl bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              title="คัดลอกข้อความสรุปผลตรวจส่งต่อใน LINE"
+            >
+              {copiedLineMsg ? (
+                <Check className="w-3.5 h-3.5 text-white" />
+              ) : (
+                <Copy className="w-3.5 h-3.5 text-white" />
+              )}
+              <span>{copiedLineMsg ? 'คัดลอกแล้ว!' : 'คัดลอกผลตรวจส่ง LINE'}</span>
+            </button>
+
             <StatusBadge status={report.status} />
             <button
               onClick={onClose}
@@ -756,7 +799,7 @@ export function CaseReviewModal({
               </div>
 
               {/* Submit Review */}
-              <div className="pt-2 flex gap-2">
+              <div className="pt-2 flex flex-wrap gap-2">
                 <button
                   type="button"
                   onClick={onClose}
@@ -765,10 +808,25 @@ export function CaseReviewModal({
                 >
                   ปิด
                 </button>
+
+                <button
+                  type="button"
+                  onClick={handleCopyReviewForLine}
+                  className="px-3.5 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                  title="คัดลอกข้อความสรุปผลตรวจพร้อมคำแนะนำเพื่อส่งต่อให้คนไข้ใน LINE"
+                >
+                  {copiedLineMsg ? (
+                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5 text-emerald-700" />
+                  )}
+                  <span>{copiedLineMsg ? 'คัดลอกข้อความแล้ว!' : 'คัดลอกผลตรวจส่ง LINE'}</span>
+                </button>
+
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-colors cursor-pointer disabled:opacity-50"
+                  className="flex-1 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-colors cursor-pointer disabled:opacity-50 min-w-[170px]"
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>

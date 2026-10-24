@@ -39,6 +39,9 @@ export interface Patient {
   hn: string;
   displayName: string;
   phoneNumber: string;
+  gender?: 'female' | 'male' | 'other';
+  age?: number;
+  medicalConditions?: string;
   lineUserId?: string;
   consentAccepted: boolean;
   consentDate?: string;
@@ -50,6 +53,10 @@ export interface SurgeryCase {
   patientName: string;
   hn: string;
   phoneNumber: string;
+  gender?: 'female' | 'male' | 'other';
+  age?: number;
+  medicalConditions?: string;
+  specialInstructions?: string;
   token: string;
   serviceType: string; // e.g. "SMAS Face-Lift & Neck Lift"
   surgeonName: string;
@@ -188,6 +195,26 @@ export interface FollowupSchedule {
   cancelReason?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface GroupedPatientSchedule {
+  caseId: string;
+  patientId: string;
+  patientName: string;
+  hn: string;
+  phoneNumber: string;
+  procedureName: string;
+  surgeonName: string;
+  gender?: 'female' | 'male' | 'other';
+  age?: number;
+  medicalConditions?: string;
+  specialInstructions?: string;
+  currentPostOpDay: number;
+  currentDayLabel: string;
+  daysOverdueCount: number;
+  daysDueCount: number;
+  latestScheduleStatus: ScheduleStatus;
+  subSchedules: FollowupSchedule[];
 }
 
 export type ClinicalTaskType =

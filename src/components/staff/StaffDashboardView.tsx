@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useAppStore } from '@/lib/store';
-import { DailyReport, SurgeryCase } from '@/lib/types';
+import { DailyReport, SurgeryCase, FollowupSchedule, GroupedPatientSchedule } from '@/lib/types';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { CaseReviewModal } from './CaseReviewModal';
 import { PhotoTimelineCompare } from './PhotoTimelineCompare';
@@ -17,7 +17,6 @@ import {
   List,
   AlertTriangle,
   Eye,
-  Copy,
   Check,
   X,
   Calendar,
@@ -25,10 +24,12 @@ import {
   ShieldCheck,
   ExternalLink,
   Database,
+  Settings,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import { DatabaseConfigModal } from '@/components/common/DatabaseConfigModal';
 import { ContactLogModal } from './ContactLogModal';
-import { FollowupSchedule } from '@/lib/types';
 import { dbService } from '@/lib/db-service';
 import { isSupabaseConfigured } from '@/lib/supabase';
 
@@ -49,6 +50,7 @@ export function StaffDashboardView() {
   const [selectedReport, setSelectedReport] = useState<DailyReport | null>(null);
   const [viewMode, setViewMode] = useState<'queue' | 'cases' | 'compare'>('queue');
   const [dueOverdueSchedules, setDueOverdueSchedules] = useState<FollowupSchedule[]>([]);
+  const [expandedCaseIds, setExpandedCaseIds] = useState<Set<string>>(new Set());
   const [selectedContactCase, setSelectedContactCase] = useState<{
     patientName: string;
     hn: string;
@@ -57,18 +59,20 @@ export function StaffDashboardView() {
     patientId: string;
     dayLabel?: string;
   } | null>(null);
-  const [copiedScheduleToken, setCopiedScheduleToken] = useState<string | null>(null);
 
   // Register New Case Modal State
   const [showNewCaseModal, setShowNewCaseModal] = useState(false);
   const [patientName, setPatientName] = useState('');
   const [hn, setHn] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');
+  const [gender, setGender] = useState<'female' | 'male' | 'other'>('female');
+  const [age, setAge] = useState('');
+  const [medicalConditions, setMedicalConditions] = useState('');
+  const [specialInstructions, setSpecialInstructions] = useState('');
   const [serviceType, setServiceType] = useState('SMAS Full Face-Lift & Neck Lift');
   const [surgeonName, setSurgeonName] = useState('นพ.สมชาย เกียรติเวชช์');
   const [surgeryDate, setSurgeryDate] = useState('2026-10-11');
   const [createdCaseResult, setCreatedCaseResult] = useState<SurgeryCase | null>(null);
-  const [copiedLink, setCopiedLink] = useState(false);
 
   const refreshOverdueSchedules = async () => {
     try {
@@ -100,6 +104,11 @@ export function StaffDashboardView() {
   const countUrgent = reports.filter((r) => r.isUrgent).length;
   const countReviewed = reports.filter((r) => r.status === 'reviewed').length;
 
+  // Grouped due/overdue schedules by patient
+  const groupedSchedules = useMemo(() => {
+    return dbService.getGroupedDueAndOverdueSchedules(dueOverdueSchedules, cases);
+  }, [dueOverdueSchedules, cases]);
+
   // Filtered reports
   const filteredReports = reports.filter((r) => {
     const matchesSearch =
@@ -118,18 +127,42 @@ export function StaffDashboardView() {
     return true;
   });
 
-  // Filtered schedules for due/overdue follow-up queue
-  const filteredSchedules = dueOverdueSchedules.filter((s) => {
-    if (!searchQuery) return true;
+  // Filtered grouped schedules for due/overdue follow-up queue
+  const filteredGroupedSchedules = useMemo(() => {
+    if (!searchQuery) return groupedSchedules;
     const q = searchQuery.toLowerCase();
-    return (
-      (s.patientName && s.patientName.toLowerCase().includes(q)) ||
-      (s.hn && s.hn.toLowerCase().includes(q)) ||
-      (s.phoneNumber && s.phoneNumber.toLowerCase().includes(q)) ||
-      (s.dayLabel && s.dayLabel.toLowerCase().includes(q)) ||
-      (s.procedureName && s.procedureName.toLowerCase().includes(q))
+    return groupedSchedules.filter(
+      (g) =>
+        g.patientName.toLowerCase().includes(q) ||
+        g.hn.toLowerCase().includes(q) ||
+        g.phoneNumber.toLowerCase().includes(q) ||
+        g.procedureName.toLowerCase().includes(q) ||
+        g.surgeonName.toLowerCase().includes(q)
     );
-  });
+  }, [groupedSchedules, searchQuery]);
+
+  const toggleExpandCase = (caseId: string) => {
+    setExpandedCaseIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(caseId)) next.delete(caseId);
+      else next.add(caseId);
+      return next;
+    });
+  };
+
+  const resetNewCaseForm = () => {
+    setPatientName('');
+    setHn('');
+    setPhoneNumber('');
+    setGender('female');
+    setAge('');
+    setMedicalConditions('');
+    setSpecialInstructions('');
+    setServiceType('SMAS Full Face-Lift & Neck Lift');
+    setSurgeonName('นพ.สมชาย เกียรติเวชช์');
+    setSurgeryDate(new Date().toISOString().split('T')[0]);
+    setCreatedCaseResult(null);
+  };
 
   const handleCreateCaseSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -145,17 +178,14 @@ export function StaffDashboardView() {
       serviceType,
       surgeonName,
       surgeryDate,
+      gender,
+      age: age ? parseInt(age, 10) : undefined,
+      medicalConditions: medicalConditions.trim() || undefined,
+      specialInstructions: specialInstructions.trim() || undefined,
     });
 
     setCreatedCaseResult(created);
     refreshOverdueSchedules();
-  };
-
-  const copyMagicLink = (token: string) => {
-    const url = `${window.location.origin}/?token=${token}`;
-    navigator.clipboard.writeText(url);
-    setCopiedLink(true);
-    setTimeout(() => setCopiedLink(false), 2500);
   };
 
   return (
@@ -184,23 +214,10 @@ export function StaffDashboardView() {
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Cloud Database Status Button */}
-          <button
-            onClick={() => setShowDbModal(true)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-              isSupabaseConfigured()
-                ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
-                : 'bg-amber-50 text-amber-700 border-amber-300 hover:bg-amber-100 animate-pulse'
-            }`}
-          >
-            <Database className="w-4 h-4" />
-            <span>{isSupabaseConfigured() ? 'Cloud: เชื่อมต่อแล้ว' : 'ต่อ Supabase Cloud'}</span>
-          </button>
-
           {/* Register New Case Button */}
           <button
             onClick={() => {
-              setCreatedCaseResult(null);
+              resetNewCaseForm();
               setShowNewCaseModal(true);
             }}
             className="flex items-center gap-1.5 px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
@@ -247,6 +264,15 @@ export function StaffDashboardView() {
               <span>เปรียบเทียบภาพ</span>
             </button>
           </div>
+
+          {/* Admin Settings Button */}
+          <button
+            onClick={() => setShowDbModal(true)}
+            className="p-2 rounded-xl border border-slate-200 hover:bg-slate-100 text-slate-400 hover:text-slate-700 transition-colors cursor-pointer"
+            title="ตั้งค่าฐานข้อมูลและระบบ (Admin Settings)"
+          >
+            <Settings className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
@@ -309,8 +335,8 @@ export function StaffDashboardView() {
             <span>ค้างส่ง/ถึงกำหนด</span>
             <AlertTriangle className="w-4 h-4 text-amber-600" />
           </div>
-          <div className="text-2xl font-black text-amber-600">{dueOverdueSchedules.length}</div>
-          <div className="text-[10px] text-slate-500 mt-0.5">ถึงเวลาแต่ยังไม่ส่ง</div>
+          <div className="text-2xl font-black text-amber-600">{groupedSchedules.length}</div>
+          <div className="text-[10px] text-slate-500 mt-0.5">คนไข้ที่ถึงเวลาส่งภาพ</div>
         </div>
 
         <div
@@ -430,7 +456,7 @@ export function StaffDashboardView() {
                     <th className="p-3">หัตถการผ่าตัด</th>
                     <th className="p-3">วันที่ผ่าตัด</th>
                     <th className="p-3">แพทย์ผู้ผ่าตัด</th>
-                    <th className="p-3 text-right">Magic Link ส่งให้คนไข้</th>
+                    <th className="p-3 text-right">สถานะการติดตาม</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
@@ -438,22 +464,35 @@ export function StaffDashboardView() {
                     <tr key={c.id} className="hover:bg-slate-50">
                       <td className="p-3">
                         <div className="font-bold text-slate-900">{c.patientName}</div>
-                        <div className="text-[10px] font-mono text-slate-500">HN: {c.hn}</div>
+                        <div className="text-[10px] font-mono text-slate-500">
+                          HN: {c.hn}
+                          {c.gender && ` · ${c.gender === 'female' ? 'หญิง' : c.gender === 'male' ? 'ชาย' : 'อื่นๆ'}`}
+                          {c.age && ` ${c.age} ปี`}
+                        </div>
+                        {c.medicalConditions && (
+                          <div className="text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 mt-1 inline-block">
+                            ⚠️ {c.medicalConditions}
+                          </div>
+                        )}
                       </td>
                       <td className="p-3 font-mono font-semibold text-slate-800">
                         {c.phoneNumber}
                       </td>
-                      <td className="p-3 text-slate-700">{c.serviceType}</td>
+                      <td className="p-3 text-slate-700">
+                        <div>{c.serviceType}</div>
+                        {c.specialInstructions && (
+                          <div className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 mt-0.5 inline-block">
+                            📝 {c.specialInstructions}
+                          </div>
+                        )}
+                      </td>
                       <td className="p-3 text-slate-600">{c.surgeryDate}</td>
                       <td className="p-3 text-slate-600">{c.surgeonName}</td>
                       <td className="p-3 text-right">
-                        <button
-                          onClick={() => copyMagicLink(c.token)}
-                          className="px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-50 hover:text-blue-700 text-slate-700 font-semibold text-xs border border-slate-200 inline-flex items-center gap-1 cursor-pointer"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                          <span>คัดลอกลิงก์</span>
-                        </button>
+                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>กำลังติดตาม (Active)</span>
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -470,7 +509,7 @@ export function StaffDashboardView() {
               {[
                 { id: 'all', label: `ทั้งหมด (${reports.length})` },
                 { id: 'pending', label: `รอตรวจ (${countPending})` },
-                { id: 'due_overdue', label: `⚠️ ค้างส่ง/ถึงกำหนด (${dueOverdueSchedules.length})` },
+                { id: 'due_overdue', label: `⚠️ ค้างส่ง/ถึงกำหนด (${groupedSchedules.length})` },
                 { id: 'urgent', label: `เร่งด่วน (${countUrgent})` },
                 { id: 'referred', label: `ส่งต่อแพทย์ (${countReferred})` },
                 { id: 'more_info', label: `ขอข้อมูลเพิ่ม (${countMoreInfo})` },
@@ -484,7 +523,7 @@ export function StaffDashboardView() {
                       ? tab.id === 'due_overdue'
                         ? 'bg-amber-500 text-white shadow-xs'
                         : 'bg-blue-600 text-white shadow-xs'
-                      : tab.id === 'due_overdue' && dueOverdueSchedules.length > 0
+                      : tab.id === 'due_overdue' && groupedSchedules.length > 0
                         ? 'bg-amber-100 text-amber-800 hover:bg-amber-200'
                         : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                   }`}
@@ -506,7 +545,7 @@ export function StaffDashboardView() {
           </div>
 
           {activeTab === 'due_overdue' ? (
-            filteredSchedules.length === 0 ? (
+            filteredGroupedSchedules.length === 0 ? (
               <div className="text-center py-16 text-slate-400 space-y-2">
                 <CheckCircle2 className="w-12 h-12 mx-auto text-emerald-500" />
                 <p className="text-sm font-semibold text-slate-700">ไม่มีเคสที่ค้างส่งภาพในขณะนี้</p>
@@ -517,117 +556,152 @@ export function StaffDashboardView() {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 font-semibold">
-                      <th className="p-3">คนไข้ & HN</th>
-                      <th className="p-3">หัตถการ</th>
-                      <th className="p-3">รอบติดตาม</th>
-                      <th className="p-3">วันที่ต้องส่ง</th>
+                      <th className="p-3">คนไข้ & เวชระเบียน</th>
+                      <th className="p-3">หัตถการ & ศัลยแพทย์</th>
+                      <th className="p-3">ระยะปัจจุบัน</th>
                       <th className="p-3">เบอร์ติดต่อ</th>
                       <th className="p-3">สถานะติดตาม</th>
                       <th className="p-3 text-right">ดำเนินการ</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {filteredSchedules.map((s) => {
-                      const isOverdue = s.scheduleStatus === 'overdue';
+                    {filteredGroupedSchedules.map((g) => {
+                      const isExpanded = expandedCaseIds.has(g.caseId);
                       return (
-                        <tr key={s.id} className="hover:bg-amber-50/40">
-                          <td className="p-3">
-                            <div className="font-bold text-slate-900">{s.patientName || 'คนไข้'}</div>
-                            <div className="text-[10px] font-mono text-slate-500">HN: {s.hn || '-'}</div>
-                          </td>
+                        <React.Fragment key={g.caseId}>
+                          <tr className="hover:bg-amber-50/40 transition-colors">
+                            <td className="p-3">
+                              <div className="font-bold text-slate-900">{g.patientName}</div>
+                              <div className="text-[10px] font-mono text-slate-500">
+                                HN: {g.hn}
+                                {g.gender && ` · ${g.gender === 'female' ? 'หญิง' : g.gender === 'male' ? 'ชาย' : 'อื่นๆ'}`}
+                                {g.age && ` ${g.age} ปี`}
+                              </div>
+                              {g.medicalConditions && (
+                                <div className="text-[10px] text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 mt-1 inline-block">
+                                  ⚠️ {g.medicalConditions}
+                                </div>
+                              )}
+                            </td>
 
-                          <td className="p-3 text-slate-600 max-w-[180px] truncate">
-                            <div className="font-medium text-slate-800">{s.procedureName || 'ศัลยกรรมตกแต่ง'}</div>
-                            <div className="text-[10px] text-slate-400">{s.surgeonName || ''}</div>
-                          </td>
+                            <td className="p-3 text-slate-600 max-w-[200px]">
+                              <div className="font-medium text-slate-800">{g.procedureName}</div>
+                              <div className="text-[10px] text-slate-400">ศัลยแพทย์: {g.surgeonName}</div>
+                              {g.specialInstructions && (
+                                <div className="text-[10px] text-blue-700 bg-blue-50 px-2 py-0.5 rounded border border-blue-200 mt-1 inline-block">
+                                  📝 {g.specialInstructions}
+                                </div>
+                              )}
+                            </td>
 
-                          <td className="p-3">
-                            <span className={`inline-block px-2.5 py-0.5 rounded-md font-black text-xs ${
-                              isOverdue ? 'bg-rose-100 text-rose-800' : 'bg-amber-100 text-amber-800'
-                            }`}>
-                              {s.dayLabel}
-                            </span>
-                          </td>
+                            <td className="p-3 whitespace-nowrap">
+                              <span className="inline-block px-2.5 py-0.5 rounded-md font-black text-xs bg-blue-100 text-blue-900">
+                                {g.currentDayLabel}
+                              </span>
+                            </td>
 
-                          <td className="p-3 text-slate-700 whitespace-nowrap font-medium">
-                            {s.scheduledDate}
-                          </td>
+                            <td className="p-3 whitespace-nowrap">
+                              {g.phoneNumber ? (
+                                <a
+                                  href={`tel:${g.phoneNumber}`}
+                                  className="text-blue-600 hover:underline font-mono font-medium flex items-center gap-1"
+                                >
+                                  <Phone className="w-3 h-3 text-slate-400" />
+                                  {g.phoneNumber}
+                                </a>
+                              ) : (
+                                <span className="text-slate-400">-</span>
+                              )}
+                            </td>
 
-                          <td className="p-3 whitespace-nowrap">
-                            {s.phoneNumber ? (
-                              <a
-                                href={`tel:${s.phoneNumber}`}
-                                className="text-blue-600 hover:underline font-mono font-medium flex items-center gap-1"
+                            <td className="p-3 whitespace-nowrap">
+                              <div>
+                                {g.daysOverdueCount > 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                    <AlertTriangle className="w-3 h-3 text-rose-500" />
+                                    ค้างส่ง {g.daysOverdueCount} วัน
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+                                    <Clock className="w-3 h-3 text-amber-500" />
+                                    ถึงกำหนดวันนี้
+                                  </span>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => toggleExpandCase(g.caseId)}
+                                className="mt-1 text-[11px] text-slate-500 hover:text-blue-700 font-semibold flex items-center gap-1 cursor-pointer"
                               >
-                                <Phone className="w-3 h-3 text-slate-400" />
-                                {s.phoneNumber}
-                              </a>
-                            ) : (
-                              <span className="text-slate-400">-</span>
-                            )}
-                          </td>
+                                {isExpanded ? (
+                                  <ChevronUp className="w-3.5 h-3.5 text-blue-600" />
+                                ) : (
+                                  <ChevronDown className="w-3.5 h-3.5 text-slate-500" />
+                                )}
+                                <span>{isExpanded ? 'ซ่อนวันย่อย' : `ดู ${g.subSchedules.length} วันย่อย`}</span>
+                              </button>
+                            </td>
 
-                          <td className="p-3 whitespace-nowrap">
-                            {isOverdue ? (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
-                                <AlertTriangle className="w-3 h-3 text-rose-500" />
-                                เกินกำหนดส่ง (Overdue)
-                              </span>
-                            ) : (
-                              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                <Clock className="w-3 h-3 text-amber-500" />
-                                ถึงกำหนดวันนี้ (Due)
-                              </span>
-                            )}
-                          </td>
-
-                          <td className="p-3 text-right whitespace-nowrap">
-                            <div className="inline-flex items-center gap-1.5">
+                            <td className="p-3 text-right whitespace-nowrap">
                               <button
                                 onClick={() =>
                                   setSelectedContactCase({
-                                    patientName: s.patientName || 'คนไข้',
-                                    hn: s.hn || '',
-                                    phoneNumber: s.phoneNumber || '',
-                                    caseId: s.caseId,
-                                    patientId: s.patientId,
-                                    dayLabel: s.dayLabel,
+                                    patientName: g.patientName,
+                                    hn: g.hn,
+                                    phoneNumber: g.phoneNumber,
+                                    caseId: g.caseId,
+                                    patientId: g.patientId,
+                                    dayLabel: g.currentDayLabel,
                                   })
                                 }
-                                className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs inline-flex items-center gap-1 shadow-xs transition-colors cursor-pointer"
+                                className="px-3.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-bold text-xs inline-flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                               >
                                 <PhoneCall className="w-3.5 h-3.5" />
                                 <span>บันทึกโทร</span>
                               </button>
+                            </td>
+                          </tr>
 
-                              {s.token && (
-                                <button
-                                  onClick={() => {
-                                    const origin = typeof window !== 'undefined' ? window.location.origin : '';
-                                    const link = `${origin}/client?token=${s.token}`;
-                                    navigator.clipboard.writeText(link);
-                                    setCopiedScheduleToken(s.token || null);
-                                    setTimeout(() => setCopiedScheduleToken(null), 2000);
-                                  }}
-                                  className="px-2.5 py-1.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold inline-flex items-center gap-1 cursor-pointer transition-colors"
-                                  title="คัดลอกลิงก์ถ่ายภาพของคนไข้"
-                                >
-                                  {copiedScheduleToken === s.token ? (
-                                    <>
-                                      <Check className="w-3.5 h-3.5 text-emerald-600" />
-                                      <span className="text-emerald-700 font-bold">คัดลอกแล้ว</span>
-                                    </>
-                                  ) : (
-                                    <>
-                                      <Copy className="w-3.5 h-3.5 text-slate-500" />
-                                      <span>ลิงก์</span>
-                                    </>
-                                  )}
-                                </button>
-                              )}
-                            </div>
-                          </td>
-                        </tr>
+                          {/* Expandable Sub-Schedules Breakdown */}
+                          {isExpanded && (
+                            <tr className="bg-slate-50/80 border-b border-slate-200 animate-fadeIn">
+                              <td colSpan={6} className="p-3.5">
+                                <div className="bg-white p-3 rounded-xl border border-slate-200 space-y-2 shadow-xs">
+                                  <div className="text-[11px] font-bold text-slate-700 flex items-center justify-between">
+                                    <span>กำหนดการติดตามรายวันของเคสนี้ (D+1 ถึง D+14):</span>
+                                    <span className="text-slate-400 font-normal">
+                                      ทั้งหมด {g.subSchedules.length} รายการที่ต้องติดตาม
+                                    </span>
+                                  </div>
+                                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-7 gap-2">
+                                    {g.subSchedules.map((sub) => (
+                                      <div
+                                        key={sub.id}
+                                        className="p-2 rounded-lg bg-slate-50 border border-slate-200 text-[11px] space-y-1"
+                                      >
+                                        <div className="flex items-center justify-between font-bold">
+                                          <span className="text-slate-900">{sub.dayLabel}</span>
+                                          <span
+                                            className={`px-1.5 py-0.2 rounded text-[9px] font-bold ${
+                                              sub.scheduleStatus === 'overdue'
+                                                ? 'bg-rose-100 text-rose-700'
+                                                : 'bg-amber-100 text-amber-800'
+                                            }`}
+                                          >
+                                            {sub.scheduleStatus === 'overdue' ? 'เกินกำหนด' : 'วันนี้'}
+                                          </span>
+                                        </div>
+                                        <div className="text-[10px] text-slate-500">
+                                          {sub.scheduledDate}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
@@ -741,52 +815,39 @@ export function StaffDashboardView() {
             </div>
 
             {createdCaseResult ? (
-              /* Success Screen showing Magic Link */
-              <div className="space-y-4 text-center py-2">
+              /* Success Screen without Magic Link */
+              <div className="space-y-4 text-center py-3">
                 <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center">
                   <Check className="w-8 h-8" />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="font-bold text-slate-900 text-base">ลงทะเบียนเคสสำเร็จ!</h4>
-                  <p className="text-xs text-slate-500">
+                  <h4 className="font-bold text-slate-900 text-base">ลงทะเบียนเคสผ่าตัดสำเร็จ!</h4>
+                  <p className="text-xs text-slate-600 font-semibold">
                     {createdCaseResult.patientName} (HN: {createdCaseResult.hn})
                   </p>
                 </div>
 
-                <div className="p-3.5 bg-blue-50 rounded-2xl border border-blue-200 text-left space-y-2 text-xs">
-                  <span className="font-bold text-blue-900 block">
-                    ลิงก์เฉพาะบุคคลสำหรับส่งให้คนไข้ทาง LINE (Magic Link):
+                <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 text-left space-y-2 text-xs">
+                  <span className="font-bold text-emerald-950 flex items-center gap-1.5">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    สร้างตารางติดตามอาการ D+1 ถึง D+14 เรียบร้อยแล้ว
                   </span>
-                  <div className="p-2 bg-white rounded-xl border border-blue-200 font-mono text-[11px] text-blue-700 break-all select-all">
-                    {typeof window !== 'undefined'
-                      ? `${window.location.origin}/?token=${createdCaseResult.token}`
-                      : `/?token=${createdCaseResult.token}`}
-                  </div>
-                  <p className="text-[11px] text-blue-800">
-                    คนไข้สามารถแตะลิงก์นี้จาก LINE เพื่อเปิดกล้องถ่ายรูปได้ทันทีโดยไม่ต้องกรอกรหัสผ่าน หรือเข้าผ่านเบอร์โทรศัพท์: <strong>{createdCaseResult.phoneNumber}</strong>
+                  <p className="text-emerald-800 leading-relaxed text-[11px]">
+                    คนไข้สามารถเข้าทำรายการติดตามอาการผ่าน <strong>LINE Official Account (Rich Menu)</strong> โดยกรอกเบอร์โทรศัพท์ <strong>{createdCaseResult.phoneNumber}</strong> เพื่อเข้าสู่หน้ากล้อง ระบบจะจดจำเครื่องอัตโนมัติสำหรับการใช้งานครั้งถัดไปค่ะ
                   </p>
                 </div>
 
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => copyMagicLink(createdCaseResult.token)}
-                    className="flex-1 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-md cursor-pointer"
-                  >
-                    {copiedLink ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-                    <span>{copiedLink ? 'คัดลอกลิงก์แล้ว!' : 'คัดลอกลิงก์ส่งทาง LINE'}</span>
-                  </button>
-
-                  <button
-                    onClick={() => setShowNewCaseModal(false)}
-                    className="px-4 py-3 rounded-xl border border-slate-300 text-slate-700 text-xs font-semibold hover:bg-slate-50 cursor-pointer"
-                  >
-                    ปิด
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowNewCaseModal(false)}
+                  className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
+                >
+                  เสร็จสิ้น (ไปที่หน้าคิวงาน)
+                </button>
               </div>
             ) : (
-              /* Case Registration Form */
-              <form onSubmit={handleCreateCaseSubmit} className="space-y-3.5 text-xs">
+              /* Case Registration Form with Clinical Fields */
+              <form onSubmit={handleCreateCaseSubmit} className="space-y-3 text-xs max-h-[75vh] overflow-y-auto pr-1">
                 <div>
                   <label className="font-bold text-slate-700 block mb-1">
                     ชื่อ-นามสกุล คนไข้: *
@@ -826,6 +887,61 @@ export function StaffDashboardView() {
                       className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:outline-hidden focus:border-blue-500"
                     />
                   </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      เพศ:
+                    </label>
+                    <select
+                      value={gender}
+                      onChange={(e) => setGender(e.target.value as 'female' | 'male' | 'other')}
+                      className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:outline-hidden focus:border-blue-500"
+                    >
+                      <option value="female">หญิง</option>
+                      <option value="male">ชาย</option>
+                      <option value="other">อื่นๆ</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="font-bold text-slate-700 block mb-1">
+                      อายุ (ปี):
+                    </label>
+                    <input
+                      type="number"
+                      min={10}
+                      max={120}
+                      value={age}
+                      onChange={(e) => setAge(e.target.value)}
+                      className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:outline-hidden focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    โรคประจำตัว / ยาที่แพ้ / ยาต้านการแข็งตัวของเลือด:
+                  </label>
+                  <input
+                    type="text"
+                    value={medicalConditions}
+                    onChange={(e) => setMedicalConditions(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:outline-hidden focus:border-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="font-bold text-slate-700 block mb-1">
+                    คำสั่งแพทย์เฉพาะเคส / ข้อควรระวังพิเศษ:
+                  </label>
+                  <input
+                    type="text"
+                    value={specialInstructions}
+                    onChange={(e) => setSpecialInstructions(e.target.value)}
+                    className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-slate-900 focus:outline-hidden focus:border-blue-500"
+                  />
                 </div>
 
                 <div>
@@ -893,9 +1009,9 @@ export function StaffDashboardView() {
 
                   <button
                     type="submit"
-                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md cursor-pointer"
+                    className="flex-1 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold shadow-md cursor-pointer transition-colors"
                   >
-                    สร้างเคสและออก Magic Link
+                    บันทึกและเปิดเคสผ่าตัด
                   </button>
                 </div>
               </form>

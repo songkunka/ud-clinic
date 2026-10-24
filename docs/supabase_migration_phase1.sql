@@ -113,3 +113,13 @@ CREATE POLICY "Public access for photo_quality_evaluations" ON public.photo_qual
 
 DROP POLICY IF EXISTS "Public access for clinical_audit_logs" ON public.clinical_audit_logs;
 CREATE POLICY "Public access for clinical_audit_logs" ON public.clinical_audit_logs FOR ALL USING (true) WITH CHECK (true);
+
+-- 7. เพิ่มฟิลด์ข้อมูลเวชระเบียนคลินิกในตารางเดิม (Patients & Surgery Cases)
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS gender TEXT;
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS age INTEGER;
+ALTER TABLE public.patients ADD COLUMN IF NOT EXISTS medical_conditions TEXT;
+
+ALTER TABLE public.surgery_cases ADD COLUMN IF NOT EXISTS gender TEXT;
+ALTER TABLE public.surgery_cases ADD COLUMN IF NOT EXISTS age INTEGER;
+ALTER TABLE public.surgery_cases ADD COLUMN IF NOT EXISTS medical_conditions TEXT;
+ALTER TABLE public.surgery_cases ADD COLUMN IF NOT EXISTS special_instructions TEXT;

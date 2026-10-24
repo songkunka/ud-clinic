@@ -260,6 +260,10 @@ export function useAppStore() {
     serviceType: string;
     surgeonName: string;
     surgeryDate: string;
+    gender?: 'female' | 'male' | 'other';
+    age?: number;
+    medicalConditions?: string;
+    specialInstructions?: string;
   }): SurgeryCase => {
     const caseId = `case-${Date.now()}`;
     const token = `ud_${Math.random().toString(36).substring(2, 10)}`;
@@ -270,6 +274,9 @@ export function useAppStore() {
       hn: data.hn.trim(),
       displayName: data.patientName.trim(),
       phoneNumber: data.phoneNumber.trim(),
+      gender: data.gender,
+      age: data.age,
+      medicalConditions: data.medicalConditions?.trim(),
       consentAccepted: true,
       consentDate: new Date().toISOString(),
     };
@@ -280,6 +287,10 @@ export function useAppStore() {
       patientName: data.patientName.trim(),
       hn: data.hn.trim(),
       phoneNumber: data.phoneNumber.trim(),
+      gender: data.gender,
+      age: data.age,
+      medicalConditions: data.medicalConditions?.trim(),
+      specialInstructions: data.specialInstructions?.trim(),
       token,
       serviceType: data.serviceType.trim() || 'SMAS Full Face-Lift & Neck Lift',
       surgeonName: data.surgeonName.trim() || 'นพ.สมชาย เกียรติเวชช์',

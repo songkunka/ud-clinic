@@ -4,6 +4,7 @@ import {
   Patient,
   DailyReport,
   FollowupSchedule,
+  GroupedPatientSchedule,
   ScheduleStatus,
   ClinicalTask,
   ContactLog,
@@ -134,6 +135,10 @@ export const dbService = {
         patientName: row.patient_name,
         hn: row.hn,
         phoneNumber: row.phone_number,
+        gender: row.gender,
+        age: row.age,
+        medicalConditions: row.medical_conditions,
+        specialInstructions: row.special_instructions,
         token: row.token,
         serviceType: row.service_type,
         surgeonName: row.surgeon_name,
@@ -216,6 +221,9 @@ export const dbService = {
         hn: newPatient.hn,
         display_name: newPatient.displayName,
         phone_number: newPatient.phoneNumber,
+        gender: newPatient.gender,
+        age: newPatient.age,
+        medical_conditions: newPatient.medicalConditions,
         consent_accepted: true,
       });
 
@@ -230,6 +238,10 @@ export const dbService = {
         patient_name: newCase.patientName,
         hn: newCase.hn,
         phone_number: newCase.phoneNumber,
+        gender: newCase.gender,
+        age: newCase.age,
+        medical_conditions: newCase.medicalConditions,
+        special_instructions: newCase.specialInstructions,
         token: newCase.token,
         service_type: newCase.serviceType,
         surgeon_name: newCase.surgeonName,
@@ -271,6 +283,10 @@ export const dbService = {
         patientName: data.patient_name,
         hn: data.hn,
         phoneNumber: data.phone_number,
+        gender: data.gender,
+        age: data.age,
+        medicalConditions: data.medical_conditions,
+        specialInstructions: data.special_instructions,
         token: data.token,
         serviceType: data.service_type,
         surgeonName: data.surgeon_name,
@@ -302,6 +318,10 @@ export const dbService = {
         patientName: data.patient_name,
         hn: data.hn,
         phoneNumber: data.phone_number,
+        gender: data.gender,
+        age: data.age,
+        medicalConditions: data.medical_conditions,
+        specialInstructions: data.special_instructions,
         token: data.token,
         serviceType: data.service_type,
         surgeonName: data.surgeon_name,
@@ -533,6 +553,87 @@ export const dbService = {
       if (a.scheduleStatus === 'overdue' && b.scheduleStatus !== 'overdue') return -1;
       if (a.scheduleStatus !== 'overdue' && b.scheduleStatus === 'overdue') return 1;
       return a.scheduledDate.localeCompare(b.scheduledDate);
+    });
+  },
+
+  getGroupedDueAndOverdueSchedules(
+    schedules: FollowupSchedule[],
+    cases: SurgeryCase[] = [],
+    providedToday?: string
+  ): GroupedPatientSchedule[] {
+    const caseMap = new Map<string, SurgeryCase>();
+    cases.forEach((c) => caseMap.set(c.id, c));
+
+    const groupedMap = new Map<string, FollowupSchedule[]>();
+    for (const s of schedules) {
+      const list = groupedMap.get(s.caseId) || [];
+      list.push(s);
+      groupedMap.set(s.caseId, list);
+    }
+
+    const result: GroupedPatientSchedule[] = [];
+    const todayStr =
+      providedToday ||
+      (typeof window !== 'undefined' ? this.getBangkokToday() : '2026-10-24');
+
+    groupedMap.forEach((subSchedules, caseId) => {
+      // Sort sub-schedules chronologically (e.g. D+1 to D+14)
+      subSchedules.sort((a, b) => a.postOpDay - b.postOpDay);
+
+      const first = subSchedules[0];
+      const matchedCase = caseMap.get(caseId);
+
+      const overdueList = subSchedules.filter((s) => s.scheduleStatus === 'overdue');
+      const dueList = subSchedules.filter((s) => s.scheduleStatus === 'due');
+
+      // Latest active sub-schedule
+      const latest = subSchedules[subSchedules.length - 1];
+
+      // Calculate current D+ based on surgeryDate if available
+      let currentPostOpDay = latest.postOpDay;
+      if (matchedCase?.surgeryDate && typeof window !== 'undefined') {
+        try {
+          const parts = matchedCase.surgeryDate.split('-').map(Number);
+          const surgDate = new Date(parts[0], parts[1] - 1, parts[2]);
+          const todayParts = todayStr.split('-').map(Number);
+          const todayDate = new Date(todayParts[0], todayParts[1] - 1, todayParts[2]);
+          const diffDays = Math.floor(
+            (todayDate.getTime() - surgDate.getTime()) / (1000 * 60 * 60 * 24)
+          );
+          if (diffDays > 0) currentPostOpDay = diffDays;
+        } catch {
+          // ignore date parse errors
+        }
+      }
+
+      result.push({
+        caseId,
+        patientId: first.patientId,
+        patientName: first.patientName || matchedCase?.patientName || 'คนไข้',
+        hn: first.hn || matchedCase?.hn || '-',
+        phoneNumber: first.phoneNumber || matchedCase?.phoneNumber || '',
+        procedureName:
+          first.procedureName || matchedCase?.serviceType || 'ศัลยกรรมตกแต่ง',
+        surgeonName: first.surgeonName || matchedCase?.surgeonName || '',
+        gender: matchedCase?.gender,
+        age: matchedCase?.age,
+        medicalConditions: matchedCase?.medicalConditions,
+        specialInstructions: matchedCase?.specialInstructions,
+        currentPostOpDay,
+        currentDayLabel: `D+${currentPostOpDay}`,
+        daysOverdueCount: overdueList.length,
+        daysDueCount: dueList.length,
+        latestScheduleStatus: overdueList.length > 0 ? 'overdue' : 'due',
+        subSchedules,
+      });
+    });
+
+    // Sort: patients with overdue first, then by days overdue descending
+    return result.sort((a, b) => {
+      if (a.daysOverdueCount !== b.daysOverdueCount) {
+        return b.daysOverdueCount - a.daysOverdueCount;
+      }
+      return b.currentPostOpDay - a.currentPostOpDay;
     });
   },
 
