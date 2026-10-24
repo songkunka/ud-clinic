@@ -58,6 +58,7 @@ export interface SurgeryCase {
   medicalConditions?: string;
   specialInstructions?: string;
   token: string;
+  lineUserId?: string;
   serviceType: string; // e.g. "SMAS Face-Lift & Neck Lift"
   surgeonName: string;
   surgeryDate: string; // YYYY-MM-DD

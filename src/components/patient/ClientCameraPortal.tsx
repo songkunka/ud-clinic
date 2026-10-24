@@ -52,6 +52,7 @@ export function ClientCameraPortal() {
   const [showSymptomSheet, setShowSymptomSheet] = useState(false);
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [showEmergencyModal, setShowEmergencyModal] = useState(false);
+  const [showDoctorAdviceSheet, setShowDoctorAdviceSheet] = useState(false);
   const [submittedReport, setSubmittedReport] = useState<DailyReport | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -73,6 +74,21 @@ export function ClientCameraPortal() {
   const currentAngle = angles[currentAngleIndex];
   const latestReport = activeCaseReports[0] || null;
 
+  // Seamless LINE OA entry via deep link
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const sp = new URLSearchParams(window.location.search);
+      const qLineId = sp.get('lineUserId');
+      const qPhone = sp.get('phone');
+      if (qLineId) {
+        localStorage.setItem('ud_patient_line_user_id', qLineId);
+      }
+      if (qPhone && !activeClientCase) {
+        clientLoginWithPhone(qPhone);
+      }
+    }
+  }, [activeClientCase, clientLoginWithPhone]);
+
   // Track retake requests from medical team
   useEffect(() => {
     if (latestReport && latestReport.status === 'more_info_requested') {
@@ -88,11 +104,13 @@ export function ClientCameraPortal() {
           if (firstIdx !== -1) {
             setCurrentAngleIndex(firstIdx);
           }
+          setShowDoctorAdviceSheet(true);
         }
       });
     } else {
       setRetakeAngles([]);
       setRetakeAdvice(null);
+      setShowDoctorAdviceSheet(false);
     }
   }, [latestReport, angles]);
 
@@ -445,10 +463,10 @@ export function ClientCameraPortal() {
         className="hidden"
       />
 
-      {/* TOP OVERLAY BAR (Clean & Minimal) */}
-      <div className="absolute top-0 inset-x-0 z-30 p-3 bg-gradient-to-b from-black/90 via-black/40 to-transparent flex items-center justify-between pointer-events-auto">
+      {/* TOP OVERLAY BAR (Clean, Minimal & Safe for iOS/LINE In-app bar) */}
+      <div className="absolute top-0 inset-x-0 z-30 pt-[max(0.75rem,env(safe-area-inset-top))] px-3 pb-3 bg-gradient-to-b from-black/95 via-black/60 to-transparent flex items-center justify-between pointer-events-auto">
         <div className="flex items-center gap-2">
-          <div className="w-8 h-8 rounded-lg overflow-hidden border border-white/20 shrink-0 shadow-sm">
+          <div className="w-9 h-9 rounded-xl overflow-hidden border border-white/20 shrink-0 shadow-sm">
             <img
               src="/logo.jpg"
               alt="UD Clinic"
@@ -458,7 +476,7 @@ export function ClientCameraPortal() {
           <span className="px-2.5 py-1 rounded-full bg-amber-700 text-white text-xs font-black tracking-wide shadow-sm">
             D+{postOpDay}
           </span>
-          <span className="text-xs font-medium text-slate-200 truncate max-w-[120px]">
+          <span className="text-xs font-semibold text-slate-200 truncate max-w-[110px]">
             {activeClientCase.patientName}
           </span>
         </div>
@@ -467,41 +485,47 @@ export function ClientCameraPortal() {
           {latestReport && (
             <button
               onClick={() => setShowFeedbackModal(true)}
-              className="text-[11px] font-semibold bg-white/15 hover:bg-white/25 px-2.5 py-1 rounded-full text-slate-100 flex items-center gap-1 backdrop-blur-md transition-colors cursor-pointer"
+              className="min-h-[44px] px-3.5 rounded-full text-xs font-bold bg-white/20 hover:bg-white/30 text-white flex items-center gap-1.5 backdrop-blur-md transition-all active:scale-95 cursor-pointer shadow-sm border border-white/10"
             >
-              <FileCheck2 className="w-3.5 h-3.5 text-blue-400" />
+              <FileCheck2 className="w-4 h-4 text-blue-400" />
               <span>ผลตรวจ</span>
             </button>
           )}
 
           <button
             onClick={() => setShowEmergencyModal(true)}
-            className="w-8 h-8 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-lg transition-transform active:scale-95 cursor-pointer"
-            title="ติดต่อสายด่วน"
+            className="w-11 h-11 rounded-full bg-red-600 hover:bg-red-500 text-white flex items-center justify-center shadow-lg transition-transform active:scale-95 cursor-pointer"
+            title="ติดต่อสายด่วน 24 ชม."
           >
-            <Phone className="w-3.5 h-3.5" />
+            <Phone className="w-5 h-5" />
           </button>
 
           <button
             onClick={clientLogout}
-            className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-slate-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+            className="w-11 h-11 rounded-full bg-white/15 hover:bg-white/25 text-slate-200 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
             title="ออกจากระบบ"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            <LogOut className="w-5 h-5" />
           </button>
         </div>
       </div>
 
       {/* Retake Notification Banner if Doctor requested retake */}
-      {retakeAngles.length > 0 && (
-        <div className="absolute top-12 inset-x-3 z-30 pointer-events-auto">
-          <div className="bg-amber-950/90 border border-amber-500/50 rounded-2xl p-2.5 shadow-xl backdrop-blur-md text-white text-xs space-y-1">
-            <div className="flex items-center gap-1.5 font-bold text-amber-300 text-[11px]">
-              <AlertCircle className="w-3.5 h-3.5 text-amber-400 shrink-0" />
-              <span>คุณหมอขอให้ถ่ายซ่อม ({retakeAngles.length} มุม):</span>
+      {retakeAngles.length > 0 && !showDoctorAdviceSheet && (
+        <div className="absolute top-[max(4.5rem,calc(env(safe-area-inset-top)+3.5rem))] inset-x-3 z-30 pointer-events-auto">
+          <div
+            onClick={() => setShowDoctorAdviceSheet(true)}
+            className="bg-amber-950/95 border border-amber-500/70 rounded-2xl p-3 shadow-xl backdrop-blur-md text-white text-xs space-y-1 cursor-pointer active:scale-98 transition-transform"
+          >
+            <div className="flex items-center justify-between font-bold text-amber-300 text-xs">
+              <span className="flex items-center gap-1.5">
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+                คุณหมอขอให้ถ่ายซ่อม ({retakeAngles.length} มุม)
+              </span>
+              <span className="text-[11px] underline text-amber-400 font-semibold">แตะอ่านคำแนะนำ</span>
             </div>
             {retakeAdvice && (
-              <p className="text-[10px] text-amber-100/90 pl-5 italic line-clamp-2">
+              <p className="text-[11px] text-amber-100/90 pl-5.5 italic line-clamp-2">
                 &ldquo;{retakeAdvice}&rdquo;
               </p>
             )}
@@ -596,8 +620,8 @@ export function ClientCameraPortal() {
         )}
       </div>
 
-      {/* BOTTOM CONTROLS & ANGLE STRIP */}
-      <div className="relative z-30 bg-gradient-to-t from-black via-black/90 to-transparent pt-3 pb-6 px-4 space-y-4">
+      {/* BOTTOM CONTROLS & ANGLE STRIP (Dynamic Safe Area for iOS & LINE In-App Browser) */}
+      <div className="relative z-30 bg-gradient-to-t from-black via-black/90 to-transparent pt-3 pb-[max(1.75rem,calc(env(safe-area-inset-bottom)+1.25rem))] px-4 space-y-4">
         {/* Angle Indicator Strip */}
         <div className="flex items-center justify-center gap-1.5 overflow-x-auto py-1">
           {angles.map((ang, idx) => {
@@ -612,7 +636,7 @@ export function ClientCameraPortal() {
                   setPreviewUrl(null);
                   startRealCamera();
                 }}
-                className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-[11px] font-semibold transition-all cursor-pointer ${
+                className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-bold transition-all cursor-pointer ${
                   isCurrent
                     ? 'bg-blue-600 text-white ring-2 ring-blue-400 shadow-md scale-105'
                     : isRetakeRequested
@@ -623,9 +647,9 @@ export function ClientCameraPortal() {
                 }`}
               >
                 {isTaken ? (
-                  <Check className="w-3 h-3 text-emerald-400" />
+                  <Check className="w-3.5 h-3.5 text-emerald-400" />
                 ) : isRetakeRequested ? (
-                  <span className="text-[9px] font-black text-amber-400">⚠️</span>
+                  <span className="text-[10px] font-black text-amber-400">⚠️</span>
                 ) : null}
                 <span>{ang.shortLabel}</span>
               </button>
@@ -639,7 +663,7 @@ export function ClientCameraPortal() {
           <div className="flex items-center justify-center gap-4 py-1">
             <button
               onClick={handleRetake}
-              className="flex-1 max-w-[140px] py-3 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              className="flex-1 max-w-[140px] py-3.5 rounded-full bg-white/15 hover:bg-white/25 text-white text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer min-h-[48px]"
             >
               <RotateCcw className="w-4 h-4" />
               <span>ถ่ายใหม่</span>
@@ -647,7 +671,7 @@ export function ClientCameraPortal() {
 
             <button
               onClick={handleAcceptPhoto}
-              className="flex-1 max-w-[180px] py-3 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-blue-600/40 transition-transform active:scale-95 cursor-pointer"
+              className="flex-1 max-w-[180px] py-3.5 rounded-full bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-lg shadow-blue-600/40 transition-transform active:scale-95 cursor-pointer min-h-[48px]"
             >
               <span>ใช้ภาพนี้</span>
               <ChevronRight className="w-4 h-4" />
@@ -658,13 +682,13 @@ export function ClientCameraPortal() {
           <div className="flex items-center justify-between max-w-xs mx-auto px-2">
             <button
               onClick={toggleFacingMode}
-              className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              className="w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors cursor-pointer"
               title="สลับกล้องหน้า/หลัง"
             >
               <RefreshCw className="w-5 h-5 text-slate-200" />
             </button>
 
-            {/* REAL SHUTTER BUTTON */}
+            {/* REAL SHUTTER BUTTON (Large & Tactile) */}
             <button
               onClick={captureRealPhoto}
               disabled={isCapturing}
@@ -680,7 +704,7 @@ export function ClientCameraPortal() {
 
             <button
               onClick={() => fileInputRef.current?.click()}
-              className="w-11 h-11 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center transition-colors cursor-pointer"
+              className="w-12 h-12 rounded-full bg-white/15 hover:bg-white/25 text-white flex items-center justify-center transition-colors cursor-pointer"
               title="เลือกรูปจากอัลบั้ม"
             >
               <Upload className="w-5 h-5 text-slate-200" />
@@ -693,7 +717,7 @@ export function ClientCameraPortal() {
           <div className="text-center pt-1">
             <button
               onClick={() => setShowSymptomSheet(true)}
-              className="text-xs text-blue-400 hover:text-blue-300 font-semibold underline underline-offset-4 cursor-pointer"
+              className="text-xs text-blue-400 hover:text-blue-300 font-semibold underline underline-offset-4 cursor-pointer py-1"
             >
               ถ่ายได้แล้ว {capturedPhotos.length}/5 มุม • แตะเพื่อบันทึกอาการและส่งรายงาน
             </button>
@@ -722,40 +746,104 @@ export function ClientCameraPortal() {
               </button>
             </div>
 
-            {/* Pain Score */}
-            <div className="space-y-1.5">
-              <div className="flex justify-between text-xs">
-                <span className="font-bold text-slate-300">1. ระดับความปวดแผล:</span>
+            {/* Pain Score - 3 Tiers Elderly-Friendly Redesign */}
+            <div className="space-y-2.5 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+              <div className="flex justify-between items-center text-xs">
+                <span className="font-bold text-slate-200">1. ระดับความปวดแผล (NRS Pain Score):</span>
                 <span
-                  className={`font-black ${
+                  className={`font-black px-2.5 py-0.5 rounded-full text-xs ${
                     painScore >= 7
-                      ? 'text-red-400'
+                      ? 'bg-red-950/90 text-red-300 border border-red-700'
                       : painScore >= 4
-                      ? 'text-amber-400'
-                      : 'text-emerald-400'
+                      ? 'bg-amber-950/90 text-amber-300 border border-amber-700'
+                      : 'bg-emerald-950/90 text-emerald-300 border border-emerald-700'
                   }`}
                 >
-                  {painScore}/10
+                  {painScore}/10 • {painScore <= 3 ? 'ปวดน้อย' : painScore <= 6 ? 'ปวดปานกลาง' : 'ปวดมากผิดปกติ'}
                 </span>
               </div>
-              <div className="grid grid-cols-11 gap-1">
-                {Array.from({ length: 11 }).map((_, i) => (
-                  <button
-                    key={i}
-                    onClick={() => setPainScore(i)}
-                    className={`py-2 text-xs font-bold rounded-lg transition-all cursor-pointer ${
-                      painScore === i
-                        ? i >= 7
-                          ? 'bg-red-600 text-white shadow-md'
-                          : i >= 4
-                          ? 'bg-amber-500 text-white shadow-md'
-                          : 'bg-blue-600 text-white shadow-md'
-                        : 'bg-slate-800 text-slate-400 hover:bg-slate-700'
-                    }`}
-                  >
-                    {i}
-                  </button>
-                ))}
+
+              {/* 3 Large Accessible Cards */}
+              <div className="grid grid-cols-3 gap-2">
+                {[
+                  {
+                    tier: 'mild',
+                    range: [0, 1, 2, 3],
+                    title: 'ปวดน้อย',
+                    sub: '0-3 สบายตัว',
+                    activeColor: 'bg-emerald-950/90 border-emerald-500 text-emerald-200 ring-2 ring-emerald-500/30',
+                    defaultVal: 1,
+                  },
+                  {
+                    tier: 'moderate',
+                    range: [4, 5, 6],
+                    title: 'ปวดปานกลาง',
+                    sub: '4-6 ตึงแผล',
+                    activeColor: 'bg-amber-950/90 border-amber-500 text-amber-200 ring-2 ring-amber-500/30',
+                    defaultVal: 5,
+                  },
+                  {
+                    tier: 'severe',
+                    range: [7, 8, 9, 10],
+                    title: 'ปวดรุนแรง',
+                    sub: '7-10 ปวดมาก',
+                    activeColor: 'bg-red-950/90 border-red-500 text-red-200 ring-2 ring-red-500/30',
+                    defaultVal: 8,
+                  },
+                ].map((t) => {
+                  const isActive = t.range.includes(painScore);
+                  return (
+                    <button
+                      key={t.tier}
+                      type="button"
+                      onClick={() => {
+                        if (!isActive) setPainScore(t.defaultVal);
+                      }}
+                      className={`p-3 rounded-2xl border text-center transition-all cursor-pointer min-h-[64px] flex flex-col items-center justify-center ${
+                        isActive
+                          ? t.activeColor
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <span className={`text-xs font-black ${isActive ? 'text-white' : 'text-slate-300'}`}>
+                        {t.title}
+                      </span>
+                      <span className="text-[10px] text-slate-400 mt-0.5">{t.sub}</span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Expanded Granular Numbers based on current tier (Large 48px tap targets) */}
+              <div className="pt-1">
+                <span className="text-[11px] text-slate-400 block mb-1.5 text-center">
+                  แตะระบุตัวเลขความปวดที่แม่นยำ:
+                </span>
+                <div className="flex items-center justify-center gap-2">
+                  {(painScore <= 3
+                    ? [0, 1, 2, 3]
+                    : painScore <= 6
+                    ? [4, 5, 6]
+                    : [7, 8, 9, 10]
+                  ).map((val) => (
+                    <button
+                      key={val}
+                      type="button"
+                      onClick={() => setPainScore(val)}
+                      className={`min-w-[48px] h-12 rounded-xl text-sm font-black transition-all cursor-pointer flex items-center justify-center ${
+                        painScore === val
+                          ? painScore >= 7
+                            ? 'bg-red-600 text-white shadow-lg ring-2 ring-red-400 scale-105'
+                            : painScore >= 4
+                            ? 'bg-amber-500 text-white shadow-lg ring-2 ring-amber-300 scale-105'
+                            : 'bg-emerald-600 text-white shadow-lg ring-2 ring-emerald-300 scale-105'
+                          : 'bg-slate-800/90 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                      }`}
+                    >
+                      {val}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -985,6 +1073,77 @@ export function ClientCameraPortal() {
               className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-semibold cursor-pointer"
             >
               ปิด
+            </button>
+          </div>
+        </div>
+      )}
+      {/* FLOATING DOCTOR RETAKE & ADVICE BOTTOM SHEET */}
+      {showDoctorAdviceSheet && (retakeAngles.length > 0 || retakeAdvice) && (
+        <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/75 p-0 sm:p-4 backdrop-blur-xs animate-fadeIn">
+          <div className="w-full max-w-md bg-slate-900 border-t sm:border border-amber-500/40 text-white rounded-t-3xl sm:rounded-3xl p-5 space-y-4 shadow-2xl pb-[max(1.5rem,calc(env(safe-area-inset-bottom)+1rem))]">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+              <div className="flex items-center gap-2">
+                <span className="w-7 h-7 rounded-full bg-amber-500/20 text-amber-400 flex items-center justify-center font-bold text-xs">
+                  📸
+                </span>
+                <div>
+                  <h3 className="font-bold text-sm text-amber-300">
+                    {retakeAngles.length > 0 ? `ขอให้ถ่ายภาพซ่อม (${retakeAngles.length} มุม)` : 'คำแนะนำล่าสุดจากทีมแพทย์'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400">
+                    คนไข้: {activeClientCase.patientName} (D+{postOpDay})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowDoctorAdviceSheet(false)}
+                className="text-slate-400 hover:text-white p-1 rounded-full cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {retakeAdvice && (
+              <div className="p-3.5 bg-amber-950/60 border border-amber-500/30 rounded-2xl space-y-1">
+                <span className="text-[11px] font-bold text-amber-300 block">
+                  คำแนะนำจากแพทย์:
+                </span>
+                <p className="text-xs text-amber-100/95 leading-relaxed">
+                  &ldquo;{retakeAdvice}&rdquo;
+                </p>
+              </div>
+            )}
+
+            {retakeAngles.length > 0 && (
+              <div className="space-y-1.5">
+                <span className="text-xs text-slate-300 font-semibold block">
+                  มุมที่ต้องถ่ายซ่อม:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {retakeAngles.map((code) => {
+                    const angObj = angles.find((a) => a.key === code);
+                    return (
+                      <span
+                        key={code}
+                        className="px-2.5 py-1 rounded-lg bg-amber-900/60 border border-amber-600/50 text-amber-200 text-xs font-bold"
+                      >
+                        • {angObj ? angObj.labelThai : code}
+                      </span>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            <button
+              onClick={() => {
+                setShowDoctorAdviceSheet(false);
+                startRealCamera();
+              }}
+              className="w-full py-3.5 rounded-2xl bg-amber-600 hover:bg-amber-500 text-white font-black text-xs shadow-lg shadow-amber-900/40 flex items-center justify-center gap-2 cursor-pointer transition-all active:scale-98"
+            >
+              <span>รับทราบคำแนะนำ • เข้าสู่กล้องถ่ายภาพ</span>
+              <ChevronRight className="w-4 h-4" />
             </button>
           </div>
         </div>

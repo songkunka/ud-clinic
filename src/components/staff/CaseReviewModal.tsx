@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { DailyReport, ReviewAction, UserRole, PhotoQualityEvaluation } from '@/lib/types';
 import { StatusBadge } from '@/components/common/StatusBadge';
 import { dbService } from '@/lib/db-service';
+import { useAppStore } from '@/lib/store';
 import {
   X,
   Lock,
@@ -21,6 +22,8 @@ import {
   FileCheck,
   UserCheck,
   Copy,
+  Smartphone,
+  CheckCircle2,
 } from 'lucide-react';
 
 interface CaseReviewModalProps {
@@ -50,6 +53,9 @@ export function CaseReviewModal({
   onClose,
   onPerformAction,
 }: CaseReviewModalProps) {
+  const { protocol, cases } = useAppStore();
+  const currentCase = cases.find((c) => c.id === report.caseId);
+
   const [selectedPhoto, setSelectedPhoto] = useState(report.photos[0] || null);
   const [photoEvaluations, setPhotoEvaluations] = useState<
     Record<string, { status: 'acceptable' | 'retake_required'; reason: string }>
@@ -78,6 +84,82 @@ export function CaseReviewModal({
   const [showTemplates, setShowTemplates] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [copiedLineMsg, setCopiedLineMsg] = useState(false);
+
+  // REAL LINE OA Push Notification State
+  const [isSendingLinePush, setIsSendingLinePush] = useState(false);
+  const [linePushStatus, setLinePushStatus] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [patientLineIdInput, setPatientLineIdInput] = useState<string>(
+    currentCase?.lineUserId || (typeof window !== 'undefined' ? localStorage.getItem('ud_patient_line_user_id') || '' : '')
+  );
+  const [showLineIdModal, setShowLineIdModal] = useState(false);
+
+  const handleSendRealLinePush = async (overrideLineId?: string) => {
+    const targetLineId = (overrideLineId || patientLineIdInput || currentCase?.lineUserId || '').trim();
+
+    if (!targetLineId || !targetLineId.startsWith('U')) {
+      setShowLineIdModal(true);
+      return;
+    }
+
+    setIsSendingLinePush(true);
+    setLinePushStatus(null);
+
+    const retakeAngs = Object.entries(photoEvaluations)
+      .filter(([_, evalItem]) => evalItem.status === 'retake_required')
+      .map(([code]) => {
+        const angDef = protocol.angles.find((a) => a.key === code);
+        return {
+          key: code,
+          labelThai: angDef ? angDef.labelThai : code,
+        };
+      });
+
+    try {
+      const res = await fetch('/api/line/push-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toLineUserId: targetLineId,
+          patientName: report.patientName,
+          hn: report.hn,
+          postOpDay: report.postOpDay,
+          messageType: actionType === 'request_more_info' ? 'retake_request' : 'doctor_feedback',
+          customerMessage: customerMessage || 'แผลแห้งดี ไม่มีความผิดปกติ ติดตามอาการตามรอบนัดค่ะ',
+          retakeAngles: retakeAngs,
+          doctorOrStaffName: report.assignedDoctorName || 'ทีมแพทย์ UD Clinic',
+          caseId: report.caseId,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setLinePushStatus({
+          success: true,
+          message: `ส่งข้อความเข้า LINE คนไข้ (${targetLineId.slice(0, 6)}...) สำเร็จแล้ว!`,
+        });
+        setShowLineIdModal(false);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ud_patient_line_user_id', targetLineId);
+        }
+      } else {
+        setLinePushStatus({
+          success: false,
+          message: data.error || 'ไม่สามารถส่งข้อความได้',
+        });
+        if (data.missingUserId) {
+          setShowLineIdModal(true);
+        }
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
+      setLinePushStatus({ success: false, message: msg });
+    } finally {
+      setIsSendingLinePush(false);
+    }
+  };
 
   const handleCopyReviewForLine = () => {
     const statusText =
@@ -305,19 +387,40 @@ export function CaseReviewModal({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5">
+          <div className="flex items-center gap-2">
+            {/* Real LINE Push Button */}
+            <button
+              type="button"
+              onClick={() => handleSendRealLinePush()}
+              disabled={isSendingLinePush}
+              className="px-3 py-1.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+              title="ส่งผลตรวจ/แจ้งเตือนเข้า LINE คนไข้อัตโนมัติ"
+            >
+              {isSendingLinePush ? (
+                <>
+                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span>กำลังส่งเข้า LINE...</span>
+                </>
+              ) : (
+                <>
+                  <Smartphone className="w-3.5 h-3.5" />
+                  <span>ส่งเตือนเข้า LINE</span>
+                </>
+              )}
+            </button>
+
             <button
               type="button"
               onClick={handleCopyReviewForLine}
-              className="px-3 py-1.5 rounded-xl bg-emerald-600/90 hover:bg-emerald-600 text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-              title="คัดลอกข้อความสรุปผลตรวจส่งต่อใน LINE"
+              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
+              title="คัดลอกข้อความสรุปผลตรวจส่งต่อใน LINE แบบเดิม"
             >
               {copiedLineMsg ? (
-                <Check className="w-3.5 h-3.5 text-white" />
+                <Check className="w-3.5 h-3.5 text-emerald-400" />
               ) : (
-                <Copy className="w-3.5 h-3.5 text-white" />
+                <Copy className="w-3.5 h-3.5 text-slate-300" />
               )}
-              <span>{copiedLineMsg ? 'คัดลอกแล้ว!' : 'คัดลอกผลตรวจส่ง LINE'}</span>
+              <span>{copiedLineMsg ? 'คัดลอกแล้ว!' : 'คัดลอกข้อความ'}</span>
             </button>
 
             <StatusBadge status={report.status} />
@@ -329,6 +432,32 @@ export function CaseReviewModal({
             </button>
           </div>
         </div>
+
+        {/* Real-time LINE Push Status Banner */}
+        {linePushStatus && (
+          <div
+            className={`px-4 py-2 text-xs flex items-center justify-between border-b ${
+              linePushStatus.success
+                ? 'bg-emerald-900/80 border-emerald-700 text-emerald-200'
+                : 'bg-amber-950/90 border-amber-800 text-amber-200'
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {linePushStatus.success ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
+              ) : (
+                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
+              )}
+              <span>{linePushStatus.message}</span>
+            </div>
+            <button
+              onClick={() => setLinePushStatus(null)}
+              className="text-xs opacity-70 hover:opacity-100 cursor-pointer ml-3 font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        )}
 
         {/* Body (2 columns: Photos inspection left, Symptoms & Action right) */}
         <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-y-auto divide-y md:divide-y-0 md:divide-x divide-slate-200">
@@ -809,18 +938,39 @@ export function CaseReviewModal({
                   ปิด
                 </button>
 
+                {/* Real LINE Push Button in Footer */}
+                <button
+                  type="button"
+                  onClick={() => handleSendRealLinePush()}
+                  disabled={isSendingLinePush}
+                  className="px-4 py-2.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
+                  title="ส่งผลตรวจ/คำขอถ่ายซ่อมเข้า LINE คนไข้อัตโนมัติ"
+                >
+                  {isSendingLinePush ? (
+                    <>
+                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>กำลังส่งเข้า LINE...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Smartphone className="w-4 h-4" />
+                      <span>ส่งเตือนเข้า LINE</span>
+                    </>
+                  )}
+                </button>
+
                 <button
                   type="button"
                   onClick={handleCopyReviewForLine}
-                  className="px-3.5 py-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 text-emerald-800 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                  className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
                   title="คัดลอกข้อความสรุปผลตรวจพร้อมคำแนะนำเพื่อส่งต่อให้คนไข้ใน LINE"
                 >
                   {copiedLineMsg ? (
                     <Check className="w-3.5 h-3.5 text-emerald-600" />
                   ) : (
-                    <Copy className="w-3.5 h-3.5 text-emerald-700" />
+                    <Copy className="w-3.5 h-3.5 text-slate-600" />
                   )}
-                  <span>{copiedLineMsg ? 'คัดลอกข้อความแล้ว!' : 'คัดลอกผลตรวจส่ง LINE'}</span>
+                  <span>{copiedLineMsg ? 'คัดลอกข้อความแล้ว!' : 'คัดลอกข้อความ'}</span>
                 </button>
 
                 <button
@@ -836,7 +986,7 @@ export function CaseReviewModal({
                       ? 'ยืนยันส่งต่อแพทย์ (Refer)'
                       : actionType === 'request_more_info'
                       ? 'ส่งคำขอถ่ายภาพซ่อม (Request Retake)'
-                      : 'บันทึกและส่งคำแนะนำ (Save & Send)'}
+                      : 'บันทึกผลตรวจ (Save)'}
                   </span>
                 </button>
               </div>
@@ -844,6 +994,72 @@ export function CaseReviewModal({
           </div>
         </div>
       </div>
+
+      {/* LINE ID LINKING MODAL (If patient does not have lineUserId yet) */}
+      {showLineIdModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-[#06C755]/10 text-[#06C755] flex items-center justify-center">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+                <div>
+                  <h4 className="font-bold text-sm text-slate-900">ระบุ LINE User ID ของคนไข้</h4>
+                  <p className="text-[11px] text-slate-500">คนไข้: {report.patientName} (เบอร์: {currentCase?.phoneNumber || '-'})</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowLineIdModal(false)}
+                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 text-xs space-y-1">
+              <span className="font-bold block text-emerald-800">💡 ข้อมูลการเชื่อมต่อ LINE Messaging API:</span>
+              <p className="text-[11px] leading-relaxed text-emerald-800">
+                LINE User ID ขึ้นต้นด้วยตัวอักษร <code>U...</code> (เช่น <code>U1234567890abcdef...</code>) สามารถดูได้จากระบบ Webhook เมื่อคนไข้ทักเข้ามา หรือให้คนไข้เปิดผ่าน LINE Rich Menu
+              </p>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-slate-700 block">
+                LINE User ID (ขึ้นต้นด้วย U):
+              </label>
+              <input
+                type="text"
+                placeholder="เช่น U1a2b3c4d5e6f7g8h9i0..."
+                value={patientLineIdInput}
+                onChange={(e) => setPatientLineIdInput(e.target.value)}
+                className="w-full text-xs font-mono p-3 rounded-xl border border-slate-300 focus:outline-hidden focus:border-[#06C755] focus:ring-1 focus:ring-[#06C755]"
+              />
+            </div>
+
+            <div className="flex gap-2 pt-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowLineIdModal(false);
+                  handleCopyReviewForLine();
+                }}
+                className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 cursor-pointer"
+              >
+                คัดลอกข้อความไปส่งเอง
+              </button>
+              <button
+                type="button"
+                disabled={!patientLineIdInput.trim() || !patientLineIdInput.trim().startsWith('U') || isSendingLinePush}
+                onClick={() => handleSendRealLinePush(patientLineIdInput.trim())}
+                className="flex-1 py-2.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] disabled:opacity-40 text-white text-xs font-black shadow-sm cursor-pointer"
+              >
+                {isSendingLinePush ? 'กำลังส่ง...' : 'บันทึก & ยิงเข้า LINE'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
