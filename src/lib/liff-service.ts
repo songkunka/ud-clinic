@@ -30,7 +30,9 @@ class LiffService {
       };
     }
 
-    if (!this.liffId) {
+    const activeLiffId = (this.liffId || process.env.NEXT_PUBLIC_LINE_LIFF_ID || '').trim();
+
+    if (!activeLiffId) {
       // Graceful fallback when LIFF ID is not set yet in environment
       return {
         success: false,
@@ -41,7 +43,8 @@ class LiffService {
     }
 
     try {
-      await liff.init({ liffId: this.liffId });
+      await liff.init({ liffId: activeLiffId });
+      this.liffId = activeLiffId;
       this.isInitialized = true;
 
       const isInClient = liff.isInClient();
