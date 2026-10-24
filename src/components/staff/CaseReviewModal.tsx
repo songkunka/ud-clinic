@@ -14,16 +14,16 @@ import {
   Stethoscope,
   ZoomIn,
   Check,
-  AlertTriangle,
   RotateCcw,
   Sparkles,
-  Calendar,
   AlertCircle,
-  FileCheck,
-  UserCheck,
   Copy,
   Smartphone,
   CheckCircle2,
+  ChevronDown,
+  ChevronUp,
+  Camera,
+  HeartPulse,
 } from 'lucide-react';
 
 interface CaseReviewModalProps {
@@ -43,7 +43,7 @@ const RETAKE_REASONS = [
   'เส้นผมบดบังรอยเย็บหน้าหู/ขมับ',
   'ภาพเบลอ หลุดโฟกัส',
   'แสงมืดหรือจ้าเกินไป',
-  'มุมกล้องไม่ตรง (ไม่ใช่ 45° หรือ 90°)',
+  'มุมกล้องไม่ตรงตามเกณฑ์',
   'สวมแว่นตาหรือผ้าคลุมบดบังแผล',
 ];
 
@@ -82,10 +82,14 @@ export function CaseReviewModal({
   const [doctorOrders, setDoctorOrders] = useState(report.doctorClinicalOrders || '');
   const [requiresClinicVisit, setRequiresClinicVisit] = useState(false);
   const [showTemplates, setShowTemplates] = useState(false);
+  const [showInternalNotes, setShowInternalNotes] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [copiedLineMsg, setCopiedLineMsg] = useState(false);
 
-  // REAL LINE OA Push Notification State
+  // Post-Save Confirmation Modal State
+  const [showPostSaveModal, setShowPostSaveModal] = useState(false);
+
+  // Real LINE Push Notification State
   const [isSendingLinePush, setIsSendingLinePush] = useState(false);
   const [linePushStatus, setLinePushStatus] = useState<{
     success: boolean;
@@ -95,98 +99,6 @@ export function CaseReviewModal({
     currentCase?.lineUserId || (typeof window !== 'undefined' ? localStorage.getItem('ud_patient_line_user_id') || '' : '')
   );
   const [showLineIdModal, setShowLineIdModal] = useState(false);
-
-  const handleSendRealLinePush = async (overrideLineId?: string) => {
-    const targetLineId = (overrideLineId || patientLineIdInput || currentCase?.lineUserId || '').trim();
-
-    if (!targetLineId || !targetLineId.startsWith('U')) {
-      setShowLineIdModal(true);
-      return;
-    }
-
-    setIsSendingLinePush(true);
-    setLinePushStatus(null);
-
-    const retakeAngs = Object.entries(photoEvaluations)
-      .filter(([_, evalItem]) => evalItem.status === 'retake_required')
-      .map(([code]) => {
-        const angDef = protocol.angles.find((a) => a.key === code);
-        return {
-          key: code,
-          labelThai: angDef ? angDef.labelThai : code,
-        };
-      });
-
-    try {
-      const res = await fetch('/api/line/push-message', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          toLineUserId: targetLineId,
-          patientName: report.patientName,
-          hn: report.hn,
-          postOpDay: report.postOpDay,
-          messageType: actionType === 'request_more_info' ? 'retake_request' : 'doctor_feedback',
-          customerMessage: customerMessage || 'แผลแห้งดี ไม่มีความผิดปกติ ติดตามอาการตามรอบนัดค่ะ',
-          retakeAngles: retakeAngs,
-          doctorOrStaffName: report.assignedDoctorName || 'ทีมแพทย์ UD Clinic',
-          caseId: report.caseId,
-        }),
-      });
-
-      const data = await res.json();
-      if (res.ok && data.success) {
-        setLinePushStatus({
-          success: true,
-          message: `ส่งข้อความเข้า LINE คนไข้ (${targetLineId.slice(0, 6)}...) สำเร็จแล้ว!`,
-        });
-        setShowLineIdModal(false);
-        if (typeof window !== 'undefined') {
-          localStorage.setItem('ud_patient_line_user_id', targetLineId);
-        }
-      } else {
-        setLinePushStatus({
-          success: false,
-          message: data.error || 'ไม่สามารถส่งข้อความได้',
-        });
-        if (data.missingUserId) {
-          setShowLineIdModal(true);
-        }
-      }
-    } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
-      setLinePushStatus({ success: false, message: msg });
-    } finally {
-      setIsSendingLinePush(false);
-    }
-  };
-
-  const handleCopyReviewForLine = () => {
-    const statusText =
-      actionType === 'reviewed'
-        ? 'ปกติเรียบร้อยดี (ตามเกณฑ์ฟื้นตัว)'
-        : actionType === 'request_more_info'
-        ? 'ขอความกรุณาถ่ายภาพซ่อมบางมุม'
-        : actionType === 'refer'
-        ? 'แพทย์กำลังตรวจประเมินเพิ่มเติม'
-        : 'ทีมพยาบาลกำลังประสานงาน';
-
-    const textToCopy = [
-      `🏥 UD CLINIC TORO — ผลการประเมินอาการหลังผ่าตัด`,
-      `👤 คนไข้: คุณ${report.patientName} (HN: ${report.hn})`,
-      `📅 ระยะเวลา: D+${report.postOpDay} หลังผ่าตัด`,
-      `🩺 สถานะการฟื้นตัว: ${statusText}`,
-      doctorOrders ? `📋 คำสั่งแพทย์: ${doctorOrders}` : '',
-      customerMessage ? `💬 คำแนะนำจากทีมดูแล: ${customerMessage}` : '',
-      `📞 ติดต่อสอบถาม/สายด่วนคลินิก: 081-456-7890`,
-    ]
-      .filter(Boolean)
-      .join('\n');
-
-    navigator.clipboard.writeText(textToCopy);
-    setCopiedLineMsg(true);
-    setTimeout(() => setCopiedLineMsg(false), 2500);
-  };
 
   // Load saved evaluations
   useEffect(() => {
@@ -198,7 +110,6 @@ export function CaseReviewModal({
         });
         setPhotoEvaluations(map);
       } else {
-        // Initialize all as acceptable
         const map: Record<string, { status: 'acceptable' | 'retake_required'; reason: string }> = {};
         report.photos.forEach((p) => {
           map[p.angleKey] = { status: 'acceptable', reason: '' };
@@ -244,12 +155,12 @@ export function CaseReviewModal({
       .map(([code, v]) => {
         const photo = report.photos.find((p) => p.angleKey === code);
         const name = photo?.angleNameThai || code;
-        return `• ${name}${v.reason ? ` (เหตุผล: ${v.reason})` : ''}`;
+        return `• ${name}${v.reason ? ` (${v.reason})` : ''}`;
       });
 
     if (retakeList.length === 0) return;
 
-    const msg = `เรียนคุณ ${report.patientName} เจ้าหน้าที่ได้ตรวจสอบภาพถ่ายประจำวันแล้ว ขอความกรุณาถ่ายภาพซ่อมเพิ่มเติมเฉพาะมุมดังนี้ค่ะ:\n${retakeList.join(
+    const msg = `เรียนคุณ ${report.patientName} เจ้าหน้าที่ได้ตรวจสอบภาพประจำวันแล้ว ขอความกรุณาถ่ายภาพซ่อมเพิ่มเติมเฉพาะมุมดังนี้ค่ะ:\n${retakeList.join(
       '\n'
     )}\n\nรบกวนเปิดระบบและถ่ายภาพตามคำแนะนำส่งเข้ามาอีกครั้งนะคะ ขอบพระคุณค่ะ`;
     setCustomerMessage(msg);
@@ -283,6 +194,96 @@ export function CaseReviewModal({
     },
   ];
 
+  const handleSendRealLinePush = async (overrideLineId?: string) => {
+    const targetLineId = (overrideLineId || patientLineIdInput || currentCase?.lineUserId || '').trim();
+
+    if (!targetLineId || !targetLineId.startsWith('U')) {
+      setShowLineIdModal(true);
+      return;
+    }
+
+    setIsSendingLinePush(true);
+    setLinePushStatus(null);
+
+    const retakeAngs = Object.entries(photoEvaluations)
+      .filter(([_, evalItem]) => evalItem.status === 'retake_required')
+      .map(([code]) => {
+        const angDef = protocol.angles.find((a) => a.key === code);
+        return {
+          key: code,
+          labelThai: angDef ? angDef.labelThai : code,
+        };
+      });
+
+    try {
+      const res = await fetch('/api/line/push-message', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          toLineUserId: targetLineId,
+          patientName: report.patientName,
+          hn: report.hn,
+          postOpDay: report.postOpDay,
+          messageType: actionType === 'request_more_info' ? 'retake_request' : 'doctor_feedback',
+          customerMessage: customerMessage || 'แผลแห้งดี ไม่มีความผิดปกติ ติดตามอาการตามรอบนัดค่ะ',
+          retakeAngles: retakeAngs,
+          doctorOrStaffName: report.assignedDoctorName || 'ทีมแพทย์ UD Clinic',
+          caseId: report.caseId,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setLinePushStatus({
+          success: true,
+          message: `ส่งข้อความเข้า LINE คนไข้เรียบร้อยแล้ว`,
+        });
+        setShowLineIdModal(false);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('ud_patient_line_user_id', targetLineId);
+        }
+      } else {
+        setLinePushStatus({
+          success: false,
+          message: data.error || 'ไม่สามารถส่งข้อความได้',
+        });
+        if (data.missingUserId) {
+          setShowLineIdModal(true);
+        }
+      }
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
+      setLinePushStatus({ success: false, message: msg });
+    } finally {
+      setIsSendingLinePush(false);
+    }
+  };
+
+  const handleCopyReviewForLine = () => {
+    const statusText =
+      actionType === 'reviewed'
+        ? 'ปกติเรียบร้อยดี (ตามเกณฑ์ฟื้นตัว)'
+        : actionType === 'request_more_info'
+        ? 'ขอความกรุณาถ่ายภาพซ่อมบางมุม'
+        : 'แพทย์กำลังตรวจประเมินเพิ่มเติม';
+
+    const textToCopy = [
+      `🏥 UD CLINIC TORO — ผลการประเมินอาการหลังผ่าตัด`,
+      `👤 คนไข้: คุณ${report.patientName} (HN: ${report.hn})`,
+      `📅 ระยะเวลา: D+${report.postOpDay} หลังผ่าตัด`,
+      `🩺 สถานะการฟื้นตัว: ${statusText}`,
+      doctorOrders ? `📋 คำสั่งแพทย์: ${doctorOrders}` : '',
+      customerMessage ? `💬 คำแนะนำ: ${customerMessage}` : '',
+      `📞 ติดต่อสอบถามคลินิก: 081-456-7890`,
+    ]
+      .filter(Boolean)
+      .join('\n');
+
+    navigator.clipboard.writeText(textToCopy);
+    setCopiedLineMsg(true);
+    setTimeout(() => setCopiedLineMsg(false), 2500);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
@@ -299,7 +300,7 @@ export function CaseReviewModal({
           reviewedBy:
             currentUserRole === 'doctor'
               ? report.assignedDoctorName || 'นพ.สมชาย เกียรติเวชช์'
-              : 'พว.เวชปฏิบัติ (Care Staff)',
+              : 'พยาบาลผู้ดูแล (Care Staff)',
           reviewedAt: new Date().toISOString(),
         })
       );
@@ -314,7 +315,7 @@ export function CaseReviewModal({
         actorName:
           currentUserRole === 'doctor'
             ? report.assignedDoctorName || 'นพ.สมชาย เกียรติเวชช์'
-            : 'พว.เวชปฏิบัติ (Care Staff)',
+            : 'พยาบาลผู้ดูแล (Care Staff)',
         actorRole: currentUserRole,
         action:
           actionType === 'refer'
@@ -350,7 +351,9 @@ export function CaseReviewModal({
         assignedTo: actionType === 'refer' ? assignedTo : report.assignedDoctorName,
       });
 
-      onClose();
+      // Instead of closing immediately, show post-save confirmation modal
+      setIsSaving(false);
+      setShowPostSaveModal(true);
     } catch (err) {
       console.error('Error saving review action:', err);
       setIsSaving(false);
@@ -358,16 +361,16 @@ export function CaseReviewModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-6 backdrop-blur-xs overflow-y-auto">
-      <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[92vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden my-auto animate-fadeIn">
-        {/* Header */}
-        <div className="bg-slate-900 text-white p-4 flex items-center justify-between border-b border-slate-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-2 sm:p-5 backdrop-blur-xs overflow-y-auto">
+      <div className="bg-white rounded-2xl max-w-5xl w-full max-h-[94vh] flex flex-col shadow-2xl border border-slate-200 overflow-hidden my-auto animate-fadeIn">
+        {/* Header - Clean & Focused (No duplicate LINE/copy buttons) */}
+        <div className="bg-slate-900 text-white px-5 py-3.5 flex items-center justify-between border-b border-slate-800">
           <div className="flex items-center gap-3">
             <div className="p-2 bg-blue-600 rounded-xl">
               <Stethoscope className="w-5 h-5 text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-bold text-sm text-white">{report.patientName}</h3>
                 <span className="text-xs font-mono text-blue-300">HN: {report.hn}</span>
                 <span className="text-xs bg-blue-700/80 px-2 py-0.5 rounded-full font-bold">
@@ -380,7 +383,7 @@ export function CaseReviewModal({
                   </span>
                 )}
               </div>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-slate-400 mt-0.5">
                 ส่งเมื่อ: {report.submittedAt || report.reportDate} | ศัลยแพทย์:{' '}
                 {report.assignedDoctorName || 'นพ.สมชาย'}
               </p>
@@ -388,76 +391,16 @@ export function CaseReviewModal({
           </div>
 
           <div className="flex items-center gap-2">
-            {/* Real LINE Push Button */}
-            <button
-              type="button"
-              onClick={() => handleSendRealLinePush()}
-              disabled={isSendingLinePush}
-              className="px-3 py-1.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
-              title="ส่งผลตรวจ/แจ้งเตือนเข้า LINE คนไข้อัตโนมัติ"
-            >
-              {isSendingLinePush ? (
-                <>
-                  <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  <span>กำลังส่งเข้า LINE...</span>
-                </>
-              ) : (
-                <>
-                  <Smartphone className="w-3.5 h-3.5" />
-                  <span>ส่งเตือนเข้า LINE</span>
-                </>
-              )}
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCopyReviewForLine}
-              className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 text-xs font-bold flex items-center gap-1.5 shadow-sm transition-colors cursor-pointer"
-              title="คัดลอกข้อความสรุปผลตรวจส่งต่อใน LINE แบบเดิม"
-            >
-              {copiedLineMsg ? (
-                <Check className="w-3.5 h-3.5 text-emerald-400" />
-              ) : (
-                <Copy className="w-3.5 h-3.5 text-slate-300" />
-              )}
-              <span>{copiedLineMsg ? 'คัดลอกแล้ว!' : 'คัดลอกข้อความ'}</span>
-            </button>
-
             <StatusBadge status={report.status} />
             <button
               onClick={onClose}
               className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
+              title="ปิดหน้าต่าง"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
         </div>
-
-        {/* Real-time LINE Push Status Banner */}
-        {linePushStatus && (
-          <div
-            className={`px-4 py-2 text-xs flex items-center justify-between border-b ${
-              linePushStatus.success
-                ? 'bg-emerald-900/80 border-emerald-700 text-emerald-200'
-                : 'bg-amber-950/90 border-amber-800 text-amber-200'
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {linePushStatus.success ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0" />
-              ) : (
-                <AlertCircle className="w-4 h-4 text-amber-400 shrink-0" />
-              )}
-              <span>{linePushStatus.message}</span>
-            </div>
-            <button
-              onClick={() => setLinePushStatus(null)}
-              className="text-xs opacity-70 hover:opacity-100 cursor-pointer ml-3 font-bold"
-            >
-              ✕
-            </button>
-          </div>
-        )}
 
         {/* Body (2 columns: Photos inspection left, Symptoms & Action right) */}
         <div className="flex-1 grid grid-cols-1 md:grid-cols-12 overflow-y-auto divide-y md:divide-y-0 md:divide-x divide-slate-200">
@@ -466,14 +409,14 @@ export function CaseReviewModal({
             <div className="flex items-center justify-between">
               <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
                 <ZoomIn className="w-4 h-4 text-blue-600" />
-                <span>ตรวจรับคุณภาพภาพถ่าย 5 มุม (Per-Angle Quality)</span>
+                <span>ตรวจคุณภาพภาพถ่าย 5 มุม</span>
               </h4>
               <span className="text-[11px] text-slate-500 font-mono">
                 {report.photos.length} มุมภาพ
               </span>
             </div>
 
-            {/* Main Preview with high-res simulation */}
+            {/* Main Preview with high-res display */}
             {selectedPhoto && (
               <div className="space-y-2">
                 <div className="relative aspect-4/3 w-full bg-slate-900 rounded-xl overflow-hidden shadow-inner flex items-center justify-center border border-slate-300">
@@ -576,7 +519,7 @@ export function CaseReviewModal({
                       </div>
                       <input
                         type="text"
-                        placeholder="หรือพิมพ์สาเหตุเฉพาะ..."
+                        placeholder="หรือพิมพ์ระบุเพิ่มเติม..."
                         value={currentEval?.reason || ''}
                         onChange={(e) =>
                           handleSetAngleStatus(
@@ -641,7 +584,7 @@ export function CaseReviewModal({
                   className="w-full py-1.5 px-3 rounded-xl bg-amber-500 hover:bg-amber-600 text-white text-xs font-bold inline-flex items-center justify-center gap-1.5 shadow-xs transition-colors cursor-pointer"
                 >
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>สร้างข้อความขอถ่ายซ่อม ({retakeAnglesCount} มุม) ลงในช่องตอบคนไข้</span>
+                  <span>สร้างข้อความขอถ่ายซ่อม ({retakeAnglesCount} มุม) ลงในกล่องแจ้งคนไข้</span>
                 </button>
               )}
             </div>
@@ -660,110 +603,152 @@ export function CaseReviewModal({
 
           {/* Right Column: Symptoms & Review Action Form */}
           <div className="md:col-span-5 p-4 sm:p-5 flex flex-col space-y-4 overflow-y-auto">
-            {/* Symptoms Data */}
-            <div className="space-y-2">
-              <h4 className="text-xs font-bold text-slate-900">
-                ข้อมูลอาการที่คนไข้รายงาน
-              </h4>
-              <div className="bg-slate-50 rounded-xl p-3 border border-slate-200 text-xs space-y-1.5">
-                <div className="flex justify-between py-1 border-b border-slate-200">
-                  <span className="text-slate-500">ระดับความปวด:</span>
-                  <span
-                    className={`font-bold ${
-                      report.symptomAnswers.painScore >= 7
-                        ? 'text-red-600'
-                        : report.symptomAnswers.painScore >= 4
-                        ? 'text-amber-600'
-                        : 'text-slate-800'
-                    }`}
-                  >
-                    {report.symptomAnswers.painScore}/10
-                  </span>
+            {/* Symptoms Data - Compact Horizontal Status Chips */}
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <h4 className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                  <HeartPulse className="w-3.5 h-3.5 text-blue-600" />
+                  <span>อาการที่คนไข้รายงาน</span>
+                </h4>
+                <span className="text-[10px] text-slate-500">ประเมินตนเอง</span>
+              </div>
+
+              {/* Horizontal Chips */}
+              <div className="flex flex-wrap gap-1.5">
+                {/* Pain Score Chip */}
+                <div
+                  className={`px-2.5 py-1 rounded-lg border text-xs font-medium flex items-center gap-1 ${
+                    report.symptomAnswers.painScore >= 7
+                      ? 'bg-rose-50 border-rose-200 text-rose-700 font-bold'
+                      : report.symptomAnswers.painScore >= 4
+                      ? 'bg-amber-50 border-amber-200 text-amber-700 font-bold'
+                      : 'bg-emerald-50 border-emerald-200 text-emerald-800'
+                  }`}
+                >
+                  <span className="text-slate-500 text-[11px]">ปวด:</span>
+                  <span>{report.symptomAnswers.painScore}/10</span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-200">
-                  <span className="text-slate-500">อาการบวม:</span>
-                  <span className="font-semibold text-slate-800">
+
+                {/* Swelling Level Chip */}
+                <div className="px-2.5 py-1 rounded-lg border border-slate-200 bg-slate-50 text-slate-700 text-xs font-medium flex items-center gap-1">
+                  <span className="text-slate-500 text-[11px]">บวม:</span>
+                  <span>
                     {report.symptomAnswers.swellingLevel === 'decreasing'
                       ? 'ลดลง'
                       : report.symptomAnswers.swellingLevel === 'same'
                       ? 'ใกล้เคียงเดิม'
-                      : 'บวมมากขึ้น (ต้องสังเกต)'}
+                      : 'บวมมากขึ้น'}
                   </span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-200">
-                  <span className="text-slate-500">การซึมของแผล:</span>
-                  <span
-                    className={`font-semibold ${
-                      report.symptomAnswers.bleedingOrDischarge === 'heavy_fresh'
-                        ? 'text-red-600'
-                        : 'text-slate-800'
-                    }`}
-                  >
+
+                {/* Bleeding/Discharge Chip */}
+                <div
+                  className={`px-2.5 py-1 rounded-lg border text-xs font-medium flex items-center gap-1 ${
+                    report.symptomAnswers.bleedingOrDischarge === 'heavy_fresh'
+                      ? 'bg-rose-50 border-rose-200 text-rose-700 font-bold'
+                      : 'border-slate-200 bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <span className="text-slate-500 text-[11px]">แผล:</span>
+                  <span>
                     {report.symptomAnswers.bleedingOrDischarge === 'none'
-                      ? 'ไม่มี'
+                      ? 'แห้งดี'
                       : report.symptomAnswers.bleedingOrDischarge === 'mild_serous'
                       ? 'ซึมเล็กน้อย'
-                      : 'ซึมมากต่อเนื่อง (เฝ้าระวัง)'}
+                      : 'ซึมมาก (เฝ้าระวัง)'}
                   </span>
                 </div>
-                <div className="flex justify-between py-1 border-b border-slate-200">
-                  <span className="text-slate-500">ไข้:</span>
-                  <span className="font-semibold text-slate-800">
+
+                {/* Fever Chip */}
+                <div
+                  className={`px-2.5 py-1 rounded-lg border text-xs font-medium flex items-center gap-1 ${
+                    report.symptomAnswers.feverStatus === 'high'
+                      ? 'bg-rose-50 border-rose-200 text-rose-700 font-bold'
+                      : 'border-slate-200 bg-slate-50 text-slate-700'
+                  }`}
+                >
+                  <span className="text-slate-500 text-[11px]">ไข้:</span>
+                  <span>
                     {report.symptomAnswers.feverStatus === 'none'
-                      ? 'ไม่มีไข้'
+                      ? 'ไม่มี'
                       : report.symptomAnswers.feverStatus === 'mild'
                       ? 'รุมๆ'
                       : 'มีไข้สูง'}
                   </span>
                 </div>
-                {report.patientNote && (
-                  <div className="pt-1">
-                    <span className="text-slate-500 block mb-0.5 font-medium">
-                      ข้อความจากคนไข้:
-                    </span>
-                    <p className="bg-white p-2 rounded-lg border border-slate-200 text-slate-800 italic">
-                      &ldquo;{report.patientNote}&rdquo;
-                    </p>
-                  </div>
-                )}
               </div>
+
+              {/* Patient Note if provided */}
+              {report.patientNote && (
+                <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-700 mt-1">
+                  <span className="text-slate-500 block text-[10px] font-semibold mb-0.5">
+                    ข้อความจากคนไข้:
+                  </span>
+                  <p className="italic text-slate-800">&ldquo;{report.patientNote}&rdquo;</p>
+                </div>
+              )}
             </div>
 
             {/* Action Form */}
-            <form onSubmit={handleSubmit} className="space-y-3.5 pt-2 border-t border-slate-200">
+            <form onSubmit={handleSubmit} className="space-y-3.5 pt-3 border-t border-slate-200">
+              {/* Segmented 3-Choice Action Control */}
               <div className="space-y-1.5">
                 <label className="text-xs font-bold text-slate-900 block">
-                  เลือกการดำเนินการ (Action)
+                  ผลการตรวจประเมิน
                 </label>
-                <div className="grid grid-cols-2 gap-1.5">
-                  {[
-                    { id: 'reviewed', label: 'บันทึกตรวจแล้ว', desc: 'อาการปกติ' },
-                    { id: 'request_more_info', label: 'ขอข้อมูล/ภาพเพิ่ม', desc: 'มุมไม่ชัด/ถ่ายซ่อม' },
-                    { id: 'refer', label: 'ส่งต่อแพทย์', desc: 'ให้แพทย์ประเมิน' },
-                    { id: 'urgent_contact', label: 'ติดต่อเร่งด่วน', desc: 'โทรประสานคนไข้' },
-                  ].map((act) => (
-                    <button
-                      key={act.id}
-                      type="button"
-                      onClick={() =>
-                        setActionType(act.id as ReviewAction['actionType'])
-                      }
-                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                        actionType === act.id
-                          ? act.id === 'urgent_contact'
-                            ? 'border-red-600 bg-red-50 text-red-900 ring-1 ring-red-500 font-bold'
-                            : act.id === 'refer'
-                            ? 'border-purple-600 bg-purple-50 text-purple-900 ring-1 ring-purple-500 font-bold'
-                            : act.id === 'request_more_info'
-                            ? 'border-amber-600 bg-amber-50 text-amber-900 ring-1 ring-amber-500 font-bold'
-                            : 'border-emerald-600 bg-emerald-50 text-emerald-900 ring-1 ring-emerald-500 font-bold'
-                          : 'border-slate-200 bg-white hover:border-slate-300 text-slate-700'
-                      }`}
-                    >
-                      <div className="text-xs font-bold">{act.label}</div>
-                      <div className="text-[10px] text-slate-500">{act.desc}</div>
-                    </button>
-                  ))}
+                <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-100 rounded-xl border border-slate-200">
+                  {/* Option 1: Reviewed (Normal) */}
+                  <button
+                    type="button"
+                    onClick={() => setActionType('reviewed')}
+                    className={`py-2 px-1.5 rounded-lg text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                      actionType === 'reviewed'
+                        ? 'bg-white text-emerald-700 shadow-sm border border-emerald-300 font-bold ring-1 ring-emerald-500/20'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 text-xs font-bold">
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>แผลปกติ</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-normal">ตามเกณฑ์ฟื้นตัว</span>
+                  </button>
+
+                  {/* Option 2: Request More Info (Retake) */}
+                  <button
+                    type="button"
+                    onClick={() => setActionType('request_more_info')}
+                    className={`py-2 px-1.5 rounded-lg text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                      actionType === 'request_more_info'
+                        ? 'bg-white text-amber-700 shadow-sm border border-amber-300 font-bold ring-1 ring-amber-500/20'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 text-xs font-bold">
+                      <Camera className="w-3.5 h-3.5 text-amber-600" />
+                      <span>ขอถ่ายซ่อม</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-normal">
+                      {retakeAnglesCount > 0 ? `${retakeAnglesCount} มุม` : 'ภาพไม่ชัด'}
+                    </span>
+                  </button>
+
+                  {/* Option 3: Refer */}
+                  <button
+                    type="button"
+                    onClick={() => setActionType('refer')}
+                    className={`py-2 px-1.5 rounded-lg text-center transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 ${
+                      actionType === 'refer'
+                        ? 'bg-white text-purple-700 shadow-sm border border-purple-300 font-bold ring-1 ring-purple-500/20'
+                        : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                    }`}
+                  >
+                    <div className="flex items-center gap-1 text-xs font-bold">
+                      <Stethoscope className="w-3.5 h-3.5 text-purple-600" />
+                      <span>ส่งต่อแพทย์</span>
+                    </div>
+                    <span className="text-[10px] text-slate-500 font-normal">ให้แพทย์ประเมิน</span>
+                  </button>
                 </div>
               </div>
 
@@ -773,7 +758,7 @@ export function CaseReviewModal({
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
                       <Stethoscope className="w-4 h-4 text-purple-700" />
-                      <span>ระดับความเร่งด่วนในการส่งต่อแพทย์</span>
+                      <span>ระดับความเร่งด่วน</span>
                     </span>
                     <div className="flex gap-1">
                       {(['routine', 'urgent', 'emergency'] as const).map((p) => (
@@ -781,13 +766,13 @@ export function CaseReviewModal({
                           key={p}
                           type="button"
                           onClick={() => setEscalationPriority(p)}
-                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase transition-all cursor-pointer ${
+                          className={`px-2 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer ${
                             escalationPriority === p
                               ? p === 'emergency'
-                                ? 'bg-red-600 text-white'
+                                ? 'bg-red-600 text-white shadow-xs'
                                 : p === 'urgent'
-                                ? 'bg-amber-600 text-white'
-                                : 'bg-purple-600 text-white'
+                                ? 'bg-amber-600 text-white shadow-xs'
+                                : 'bg-purple-600 text-white shadow-xs'
                               : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
                           }`}
                         >
@@ -807,10 +792,10 @@ export function CaseReviewModal({
                       className="w-full text-xs p-2 rounded-xl border border-purple-300 bg-white text-slate-800"
                     >
                       <option value="นพ.สมชาย เกียรติเวชช์">
-                        นพ.สมชาย เกียรติเวชช์ (Chief Surgeon)
+                        นพ.สมชาย เกียรติเวชช์ (แพทย์เจ้าของไข้)
                       </option>
                       <option value="พญ.นภา วงศ์สุริยา">
-                        พญ.นภา วงศ์สุริยา (Facial Plastic Specialist)
+                        พญ.นภา วงศ์สุริยา (ศัลยแพทย์ตกแต่ง)
                       </option>
                     </select>
                   </div>
@@ -827,63 +812,21 @@ export function CaseReviewModal({
                 </div>
               )}
 
-              {/* Doctor's Orders (If Doctor role or reviewing) */}
-              {(currentUserRole === 'doctor' || actionType === 'reviewed') && (
-                <div className="space-y-1">
-                  <label className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                    <UserCheck className="w-3.5 h-3.5 text-blue-600" />
-                    <span>คำสั่งแพทย์ / การวินิจฉัย (Doctor Clinical Orders)</span>
-                  </label>
-                  <input
-                    type="text"
-                    placeholder="เช่น แผลแห้งดี ให้ประคบอุ่นต่อเนื่อง ทายาลดรอยช้ำ..."
-                    value={doctorOrders}
-                    onChange={(e) => setDoctorOrders(e.target.value)}
-                    className="w-full text-xs p-2 rounded-xl border border-slate-300 bg-white text-slate-900 focus:outline-hidden focus:border-blue-500"
-                  />
-                </div>
-              )}
-
-              {/* STRICT SEPARATION 1: Internal Clinical Note (Patient NEVER sees this!) */}
-              <div className="space-y-1">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                    <Lock className="w-3 h-3 text-amber-600" />
-                    <span>Internal Note (บันทึกภายในคลินิก)</span>
-                  </label>
-                  <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded-sm font-semibold">
-                    คนไข้ไม่เห็น
-                  </span>
-                </div>
-                <textarea
-                  rows={2}
-                  value={internalNote}
-                  placeholder="บันทึกอาการทางคลินิกเพื่อส่งต่อทีมแพทย์และพยาบาล..."
-                  onChange={(e) => setInternalNote(e.target.value)}
-                  className="w-full text-xs p-2.5 rounded-xl border border-amber-200 bg-amber-50/20 text-slate-900 focus:outline-hidden focus:border-amber-400"
-                />
-              </div>
-
-              {/* STRICT SEPARATION 2: Customer Message (Shown to patient in app) */}
+              {/* PRIMARY TEXTAREA: Customer Message (Direct to Patient LINE) */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-slate-900 flex items-center gap-1">
-                    <MessageSquare className="w-3 h-3 text-blue-600" />
-                    <span>ข้อความถึงคนไข้ (Customer Message)</span>
+                  <label className="text-xs font-bold text-slate-900 flex items-center gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5 text-blue-600" />
+                    <span>ข้อความแจ้งคนไข้ (ส่งทาง LINE)</span>
                   </label>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onClick={() => setShowTemplates(!showTemplates)}
-                      className="text-[10px] text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md font-bold flex items-center gap-1 cursor-pointer transition-colors"
-                    >
-                      <Sparkles className="w-3 h-3 text-blue-600" />
-                      <span>{showTemplates ? 'ซ่อนเทมเพลต' : '⚡ ข้อความสำเร็จรูป'}</span>
-                    </button>
-                    <span className="text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded-sm font-semibold">
-                      คนไข้จะเห็นข้อความนี้
-                    </span>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowTemplates(!showTemplates)}
+                    className="text-[10px] text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-2 py-0.5 rounded-md font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                  >
+                    <Sparkles className="w-3 h-3 text-blue-600" />
+                    <span>{showTemplates ? 'ซ่อนเทมเพลต' : 'ข้อความสำเร็จรูป'}</span>
+                  </button>
                 </div>
 
                 {/* Templates Accordion */}
@@ -921,14 +864,66 @@ export function CaseReviewModal({
                 <textarea
                   rows={3}
                   value={customerMessage}
-                  placeholder="พิมพ์ข้อความตอบกลับหรือคำแนะนำทางการแพทย์แก่คนไข้..."
+                  placeholder="พิมพ์ข้อความตอบกลับหรือคำแนะนำการดูแลแผลแก่คนไข้..."
                   onChange={(e) => setCustomerMessage(e.target.value)}
                   className="w-full text-xs p-2.5 rounded-xl border border-blue-200 bg-blue-50/20 text-slate-900 focus:outline-hidden focus:border-blue-400"
                 />
               </div>
 
-              {/* Submit Review */}
-              <div className="pt-2 flex flex-wrap gap-2">
+              {/* COLLAPSIBLE ACCORDION: Internal Notes & Doctor Orders */}
+              <div className="border border-slate-200 rounded-xl overflow-hidden bg-slate-50/60">
+                <button
+                  type="button"
+                  onClick={() => setShowInternalNotes(!showInternalNotes)}
+                  className="w-full px-3 py-2 text-left flex items-center justify-between text-xs text-slate-700 font-semibold hover:bg-slate-100/80 transition-colors cursor-pointer"
+                >
+                  <div className="flex items-center gap-1.5">
+                    <Lock className="w-3.5 h-3.5 text-amber-600" />
+                    <span>บันทึกช่วยจำภายในคลินิก (เฉพาะเจ้าหน้าที่)</span>
+                    <span className="text-[9px] bg-amber-100 text-amber-800 px-1.5 py-0.2 rounded-sm font-bold">
+                      คนไข้ไม่เห็น
+                    </span>
+                  </div>
+                  {showInternalNotes ? (
+                    <ChevronUp className="w-4 h-4 text-slate-400" />
+                  ) : (
+                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                  )}
+                </button>
+
+                {showInternalNotes && (
+                  <div className="p-3 pt-1 space-y-2.5 border-t border-slate-200 bg-white animate-fadeIn">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-700 block">
+                        คำแนะนำ / วินิจฉัยของแพทย์:
+                      </label>
+                      <input
+                        type="text"
+                        placeholder="เช่น แผลแห้งดี ให้ประคบอุ่นต่อเนื่อง ทายาลดรอยช้ำ..."
+                        value={doctorOrders}
+                        onChange={(e) => setDoctorOrders(e.target.value)}
+                        className="w-full text-xs p-2 rounded-xl border border-slate-300 bg-slate-50 text-slate-900 focus:outline-hidden focus:border-blue-500"
+                      />
+                    </div>
+
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-bold text-slate-700 block">
+                        บันทึกอาการและข้อสังเกตภายในคลินิก:
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={internalNote}
+                        placeholder="บันทึกข้อมูลทางคลินิกเพื่อส่งต่อทีมแพทย์และพยาบาล..."
+                        onChange={(e) => setInternalNote(e.target.value)}
+                        className="w-full text-xs p-2 rounded-xl border border-amber-200 bg-amber-50/20 text-slate-900 focus:outline-hidden focus:border-amber-400"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Bottom Action Bar: Clean, Single Primary Action CTA */}
+              <div className="pt-2 flex items-center justify-between gap-3 border-t border-slate-200">
                 <button
                   type="button"
                   onClick={onClose}
@@ -938,55 +933,26 @@ export function CaseReviewModal({
                   ปิด
                 </button>
 
-                {/* Real LINE Push Button in Footer */}
-                <button
-                  type="button"
-                  onClick={() => handleSendRealLinePush()}
-                  disabled={isSendingLinePush}
-                  className="px-4 py-2.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-sm transition-all active:scale-95 cursor-pointer disabled:opacity-50"
-                  title="ส่งผลตรวจ/คำขอถ่ายซ่อมเข้า LINE คนไข้อัตโนมัติ"
-                >
-                  {isSendingLinePush ? (
-                    <>
-                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>กำลังส่งเข้า LINE...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Smartphone className="w-4 h-4" />
-                      <span>ส่งเตือนเข้า LINE</span>
-                    </>
-                  )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={handleCopyReviewForLine}
-                  className="px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-300 text-slate-700 text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-xs"
-                  title="คัดลอกข้อความสรุปผลตรวจพร้อมคำแนะนำเพื่อส่งต่อให้คนไข้ใน LINE"
-                >
-                  {copiedLineMsg ? (
-                    <Check className="w-3.5 h-3.5 text-emerald-600" />
-                  ) : (
-                    <Copy className="w-3.5 h-3.5 text-slate-600" />
-                  )}
-                  <span>{copiedLineMsg ? 'คัดลอกข้อความแล้ว!' : 'คัดลอกข้อความ'}</span>
-                </button>
-
                 <button
                   type="submit"
                   disabled={isSaving}
-                  className="flex-1 py-2.5 px-4 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-colors cursor-pointer disabled:opacity-50 min-w-[170px]"
+                  className={`flex-1 py-2.5 px-4 rounded-xl text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all active:scale-98 cursor-pointer disabled:opacity-50 ${
+                    actionType === 'refer'
+                      ? 'bg-purple-600 hover:bg-purple-700'
+                      : actionType === 'request_more_info'
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                  }`}
                 >
                   <Send className="w-3.5 h-3.5" />
                   <span>
                     {isSaving
                       ? 'กำลังบันทึก...'
                       : actionType === 'refer'
-                      ? 'ยืนยันส่งต่อแพทย์ (Refer)'
+                      ? 'ยืนยันส่งต่อแพทย์'
                       : actionType === 'request_more_info'
-                      ? 'ส่งคำขอถ่ายภาพซ่อม (Request Retake)'
-                      : 'บันทึกผลตรวจ (Save)'}
+                      ? `ยืนยันขอถ่ายซ่อม (${retakeAnglesCount > 0 ? `${retakeAnglesCount} มุม` : 'เลือกมุม'})`
+                      : 'บันทึกผลตรวจ (แผลปกติ)'}
                   </span>
                 </button>
               </div>
@@ -995,9 +961,122 @@ export function CaseReviewModal({
         </div>
       </div>
 
+      {/* POST-SAVE CONFIRMATION MODAL (Step 2: Smooth Notification Decision) */}
+      {showPostSaveModal && (
+        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-fadeIn">
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
+            <div className="text-center space-y-2">
+              <div className="w-12 h-12 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-xs">
+                <CheckCircle2 className="w-7 h-7" />
+              </div>
+              <h3 className="font-bold text-base text-slate-900">บันทึกผลตรวจเรียบร้อยแล้ว</h3>
+              <p className="text-xs text-slate-600 leading-relaxed">
+                บันทึกการประเมินเข้าระบบคลินิกเรียบร้อย คุณต้องการส่งข้อความแจ้งเตือนผลตรวจนี้เข้า LINE ของคนไข้ทันทีเลยหรือไม่?
+              </p>
+            </div>
+
+            {/* Notification Summary Preview */}
+            <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs space-y-1.5">
+              <div className="flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-200 pb-1">
+                <span>คนไข้: <strong className="text-slate-800">{report.patientName}</strong></span>
+                <span>HN: <strong className="font-mono text-slate-800">{report.hn}</strong></span>
+              </div>
+              <div className="text-slate-700 text-[11px]">
+                <span className="font-semibold text-slate-900 block mb-0.5">ข้อความที่จะส่ง:</span>
+                <p className="line-clamp-3 italic text-slate-600 bg-white p-2 rounded-lg border border-slate-200">
+                  {customerMessage || (actionType === 'request_more_info' ? 'ขอความกรุณาถ่ายภาพซ่อมเพิ่มเติม...' : 'แผลแห้งดี ไม่มีความผิดปกติค่ะ')}
+                </p>
+              </div>
+            </div>
+
+            {/* Status Message if LINE was sent */}
+            {linePushStatus && (
+              <div
+                className={`p-3 rounded-xl text-xs flex items-center justify-between border ${
+                  linePushStatus.success
+                    ? 'bg-emerald-50 border-emerald-300 text-emerald-900 font-semibold'
+                    : 'bg-amber-50 border-amber-300 text-amber-900'
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {linePushStatus.success ? (
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  )}
+                  <span>{linePushStatus.message}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Post-Save Actions */}
+            <div className="space-y-2 pt-1">
+              {!linePushStatus?.success ? (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => handleSendRealLinePush()}
+                    disabled={isSendingLinePush}
+                    className="w-full py-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all active:scale-98 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSendingLinePush ? (
+                      <>
+                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>กำลังส่งเข้า LINE คนไข้...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Smartphone className="w-4 h-4" />
+                        <span>ส่งข้อความเข้า LINE คนไข้ทันที</span>
+                      </>
+                    )}
+                  </button>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <button
+                      type="button"
+                      onClick={handleCopyReviewForLine}
+                      className="py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      {copiedLineMsg ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span className="text-emerald-700 font-bold">คัดลอกแล้ว!</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-3.5 h-3.5 text-slate-500" />
+                          <span>คัดลอกข้อความ</span>
+                        </>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
+                    >
+                      ปิดหน้าต่าง
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  onClick={onClose}
+                  className="w-full py-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold shadow-md cursor-pointer"
+                >
+                  เสร็จสิ้น (ปิดหน้าต่าง)
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* LINE ID LINKING MODAL (If patient does not have lineUserId yet) */}
       {showLineIdModal && (
-        <div className="fixed inset-0 z-60 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-fadeIn">
+        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-fadeIn">
           <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <div className="flex items-center gap-2">
@@ -1020,7 +1099,7 @@ export function CaseReviewModal({
             <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 text-xs space-y-1">
               <span className="font-bold block text-emerald-800">💡 ข้อมูลการเชื่อมต่อ LINE Messaging API:</span>
               <p className="text-[11px] leading-relaxed text-emerald-800">
-                LINE User ID ขึ้นต้นด้วยตัวอักษร <code>U...</code> (เช่น <code>U1234567890abcdef...</code>) สามารถดูได้จากระบบ Webhook เมื่อคนไข้ทักเข้ามา หรือให้คนไข้เปิดผ่าน LINE Rich Menu
+                LINE User ID ขึ้นต้นด้วยตัวอักษร <code>U...</code> (เช่น <code>U1234567890abcdef...</code>) ได้จากการที่คนไข้พิมพ์คุยกับบอท หรือคลิกเมนูใน LINE OA
               </p>
             </div>
 
