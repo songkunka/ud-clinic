@@ -166,15 +166,16 @@ export function StaffDashboardView() {
 
   const handleCreateCaseSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!patientName.trim() || !hn.trim() || !phoneNumber.trim()) {
-      alert('กรุณากรอกชื่อคนไข้, เลข HN และเบอร์โทรศัพท์ให้ครบถ้วน');
+    const cleanPhone = phoneNumber.replace(/[^0-9]/g, '');
+    if (!patientName.trim() || !hn.trim() || cleanPhone.length < 9) {
+      alert('กรุณากรอกชื่อคนไข้, เลข HN และเบอร์โทรศัพท์ (9-10 หลัก) ให้ครบถ้วน');
       return;
     }
 
     const created = createNewCase({
-      patientName,
-      hn,
-      phoneNumber,
+      patientName: patientName.trim(),
+      hn: hn.trim(),
+      phoneNumber: cleanPhone,
       serviceType,
       surgeonName,
       surgeryDate,
@@ -815,13 +816,13 @@ export function StaffDashboardView() {
             </div>
 
             {createdCaseResult ? (
-              /* Success Screen without Magic Link */
+              /* Success Screen */
               <div className="space-y-4 text-center py-3">
-                <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center">
+                <div className="w-14 h-14 rounded-full bg-emerald-100 text-emerald-600 mx-auto flex items-center justify-center shadow-xs">
                   <Check className="w-8 h-8" />
                 </div>
                 <div className="space-y-1">
-                  <h4 className="font-bold text-slate-900 text-base">ลงทะเบียนเคสผ่าตัดสำเร็จ!</h4>
+                  <h4 className="font-bold text-slate-900 text-base">ลงทะเบียนเคสผ่าตัดสำเร็จ</h4>
                   <p className="text-xs text-slate-600 font-semibold">
                     {createdCaseResult.patientName} (HN: {createdCaseResult.hn})
                   </p>
@@ -832,14 +833,19 @@ export function StaffDashboardView() {
                     <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
                     สร้างตารางติดตามอาการ D+1 ถึง D+14 เรียบร้อยแล้ว
                   </span>
-                  <p className="text-emerald-800 leading-relaxed text-[11px]">
-                    คนไข้สามารถเข้าทำรายการติดตามอาการผ่าน <strong>LINE Official Account (Rich Menu)</strong> โดยกรอกเบอร์โทรศัพท์ <strong>{createdCaseResult.phoneNumber}</strong> เพื่อเข้าสู่หน้ากล้อง ระบบจะจดจำเครื่องอัตโนมัติสำหรับการใช้งานครั้งถัดไปค่ะ
-                  </p>
+                  <div className="text-emerald-800 text-[11px] space-y-1 pt-1.5 border-t border-emerald-200/60">
+                    <div>เบอร์โทรศัพท์สำหรับเข้าสู่ระบบ: <strong className="font-mono text-emerald-950">{createdCaseResult.phoneNumber}</strong></div>
+                    <div>หัตถการ: <strong>{createdCaseResult.serviceType}</strong></div>
+                    <div>แพทย์ผู้ผ่าตัด: <strong>{createdCaseResult.surgeonName}</strong></div>
+                  </div>
                 </div>
 
                 <button
                   type="button"
-                  onClick={() => setShowNewCaseModal(false)}
+                  onClick={() => {
+                    setShowNewCaseModal(false);
+                    resetNewCaseForm();
+                  }}
                   className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-md transition-colors cursor-pointer"
                 >
                   เสร็จสิ้น (ไปที่หน้าคิวงาน)

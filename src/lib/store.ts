@@ -212,8 +212,8 @@ export function useAppStore() {
     return null;
   };
 
-  // CLIENT LOGIN: By 10-digit Phone Number (Elderly Friendly with Cloud Support)
-  const clientLoginWithPhone = async (phone: string): Promise<SurgeryCase | null> => {
+  // CLIENT LOGIN: By 10-digit Phone Number (Elderly Friendly with Cloud Support & LIFF Auto-Binding)
+  const clientLoginWithPhone = async (phone: string, lineUserId?: string): Promise<SurgeryCase | null> => {
     const cleanPhone = phone.replace(/[^0-9]/g, '');
     let matched = cases.find(
       (c) => c.phoneNumber.replace(/[^0-9]/g, '') === cleanPhone
@@ -223,17 +223,26 @@ export function useAppStore() {
       const cloudCase = await dbService.findCaseByPhone(cleanPhone);
       if (cloudCase) {
         matched = cloudCase;
-        setCases((prev) => {
-          const updated = [cloudCase, ...prev.filter((c) => c.id !== cloudCase.id)];
-          if (typeof window !== 'undefined') {
-            localStorage.setItem(STORAGE_KEY_CASES, JSON.stringify(updated));
-          }
-          return updated;
-        });
       }
     }
 
     if (matched) {
+      const finalLineId = (lineUserId || (typeof window !== 'undefined' ? localStorage.getItem('ud_patient_line_user_id') || '' : '')).trim();
+      if (finalLineId && matched.lineUserId !== finalLineId) {
+        matched = { ...matched, lineUserId: finalLineId };
+        if (dbService.isAvailable()) {
+          dbService.updateCaseLineUserId(matched.id, finalLineId);
+        }
+      }
+
+      setCases((prev) => {
+        const updated = [matched!, ...prev.filter((c) => c.id !== matched!.id)];
+        if (typeof window !== 'undefined') {
+          localStorage.setItem(STORAGE_KEY_CASES, JSON.stringify(updated));
+        }
+        return updated;
+      });
+
       setClientTokenState(matched.token);
       if (typeof window !== 'undefined') {
         localStorage.setItem(STORAGE_KEY_CLIENT_TOKEN, matched.token);

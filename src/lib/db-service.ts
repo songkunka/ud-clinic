@@ -140,6 +140,7 @@ export const dbService = {
         medicalConditions: row.medical_conditions,
         specialInstructions: row.special_instructions,
         token: row.token,
+        lineUserId: row.line_user_id,
         serviceType: row.service_type,
         surgeonName: row.surgeon_name,
         surgeryDate: row.surgery_date,
@@ -243,6 +244,7 @@ export const dbService = {
         medical_conditions: newCase.medicalConditions,
         special_instructions: newCase.specialInstructions,
         token: newCase.token,
+        line_user_id: newCase.lineUserId,
         service_type: newCase.serviceType,
         surgeon_name: newCase.surgeonName,
         surgery_date: newCase.surgeryDate,
@@ -288,6 +290,7 @@ export const dbService = {
         medicalConditions: data.medical_conditions,
         specialInstructions: data.special_instructions,
         token: data.token,
+        lineUserId: data.line_user_id,
         serviceType: data.service_type,
         surgeonName: data.surgeon_name,
         surgeryDate: data.surgery_date,
@@ -323,6 +326,7 @@ export const dbService = {
         medicalConditions: data.medical_conditions,
         specialInstructions: data.special_instructions,
         token: data.token,
+        lineUserId: data.line_user_id,
         serviceType: data.service_type,
         surgeonName: data.surgeon_name,
         surgeryDate: data.surgery_date,
@@ -331,6 +335,20 @@ export const dbService = {
       };
     } catch {
       return null;
+    }
+  },
+
+  async updateCaseLineUserId(caseId: string, lineUserId: string): Promise<boolean> {
+    const sb = getSupabase();
+    if (!sb) return false;
+    try {
+      const { error } = await sb
+        .from('surgery_cases')
+        .update({ line_user_id: lineUserId })
+        .eq('id', caseId);
+      return !error;
+    } catch {
+      return false;
     }
   },
 

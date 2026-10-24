@@ -95,10 +95,8 @@ export function CaseReviewModal({
     success: boolean;
     message: string;
   } | null>(null);
-  const [patientLineIdInput, setPatientLineIdInput] = useState<string>(
-    currentCase?.lineUserId || (typeof window !== 'undefined' ? localStorage.getItem('ud_patient_line_user_id') || '' : '')
-  );
-  const [showLineIdModal, setShowLineIdModal] = useState(false);
+
+  const isLineLinked = Boolean(currentCase?.lineUserId && currentCase.lineUserId.trim().startsWith('U'));
 
   // Load saved evaluations
   useEffect(() => {
@@ -194,11 +192,11 @@ export function CaseReviewModal({
     },
   ];
 
-  const handleSendRealLinePush = async (overrideLineId?: string) => {
-    const targetLineId = (overrideLineId || patientLineIdInput || currentCase?.lineUserId || '').trim();
+  const handleSendRealLinePush = async () => {
+    const targetLineId = (currentCase?.lineUserId || (typeof window !== 'undefined' ? localStorage.getItem('ud_patient_line_user_id') || '' : '')).trim();
 
     if (!targetLineId || !targetLineId.startsWith('U')) {
-      setShowLineIdModal(true);
+      handleCopyReviewForLine();
       return;
     }
 
@@ -238,7 +236,6 @@ export function CaseReviewModal({
           success: true,
           message: `ส่งข้อความเข้า LINE คนไข้เรียบร้อยแล้ว`,
         });
-        setShowLineIdModal(false);
         if (typeof window !== 'undefined') {
           localStorage.setItem('ud_patient_line_user_id', targetLineId);
         }
@@ -247,9 +244,6 @@ export function CaseReviewModal({
           success: false,
           message: data.error || 'ไม่สามารถส่งข้อความได้',
         });
-        if (data.missingUserId) {
-          setShowLineIdModal(true);
-        }
       }
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'เกิดข้อผิดพลาดในการเชื่อมต่อ';
@@ -1012,41 +1006,89 @@ export function CaseReviewModal({
             {/* Post-Save Actions */}
             <div className="space-y-2 pt-1">
               {!linePushStatus?.success ? (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => handleSendRealLinePush()}
-                    disabled={isSendingLinePush}
-                    className="w-full py-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all active:scale-98 cursor-pointer disabled:opacity-50"
-                  >
-                    {isSendingLinePush ? (
-                      <>
-                        <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>กำลังส่งเข้า LINE คนไข้...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Smartphone className="w-4 h-4" />
-                        <span>ส่งข้อความเข้า LINE คนไข้ทันที</span>
-                      </>
-                    )}
-                  </button>
+                isLineLinked ? (
+                  <>
+                    <div className="flex items-center justify-between text-xs font-semibold text-emerald-800 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200">
+                      <span className="flex items-center gap-1.5">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span>ผูก LINE กับระบบเรียบร้อยแล้ว</span>
+                      </span>
+                      <span className="text-[10px] text-emerald-600 font-mono">พร้อมส่งอัตโนมัติ</span>
+                    </div>
 
-                  <div className="grid grid-cols-2 gap-2">
                     <button
                       type="button"
-                      onClick={handleCopyReviewForLine}
-                      className="py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                      onClick={() => handleSendRealLinePush()}
+                      disabled={isSendingLinePush}
+                      className="w-full py-3 rounded-xl bg-[#06C755] hover:bg-[#05b34c] text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all active:scale-98 cursor-pointer disabled:opacity-50"
                     >
-                      {copiedLineMsg ? (
+                      {isSendingLinePush ? (
                         <>
-                          <Check className="w-3.5 h-3.5 text-emerald-600" />
-                          <span className="text-emerald-700 font-bold">คัดลอกแล้ว!</span>
+                          <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>กำลังส่งเข้า LINE คนไข้...</span>
                         </>
                       ) : (
                         <>
-                          <Copy className="w-3.5 h-3.5 text-slate-500" />
-                          <span>คัดลอกข้อความ</span>
+                          <Smartphone className="w-4 h-4" />
+                          <span>ส่งข้อความเข้า LINE คนไข้ทันที</span>
+                        </>
+                      )}
+                    </button>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={handleCopyReviewForLine}
+                        className="py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                      >
+                        {copiedLineMsg ? (
+                          <>
+                            <Check className="w-3.5 h-3.5 text-emerald-600" />
+                            <span className="text-emerald-700 font-bold">คัดลอกแล้ว!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3.5 h-3.5 text-slate-500" />
+                            <span>คัดลอกข้อความ</span>
+                          </>
+                        )}
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={onClose}
+                        className="py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
+                      >
+                        ปิดหน้าต่าง
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="p-3 bg-amber-50/80 rounded-xl border border-amber-200 text-xs text-amber-900 space-y-1">
+                      <div className="flex items-center gap-1.5 font-bold text-amber-950">
+                        <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                        <span>คนไข้ยังไม่ได้เข้าสู่ระบบผ่าน LINE</span>
+                      </div>
+                      <p className="text-[11px] text-amber-800 leading-relaxed">
+                        คนไข้ยังไม่ได้เปิดเว็บผ่าน LINE OA คุณสามารถกดปุ่มคัดลอกข้อความด้านล่าง เพื่อนำไปวางส่งในห้องแชทของคลินิกได้ทันทีค่ะ
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleCopyReviewForLine}
+                      className="w-full py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all active:scale-98 cursor-pointer"
+                    >
+                      {copiedLineMsg ? (
+                        <>
+                          <Check className="w-4 h-4 text-emerald-300" />
+                          <span>คัดลอกข้อความแล้ว! นำไปวางในแชท LINE ได้ทันที</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy className="w-4 h-4" />
+                          <span>คัดลอกข้อความส่งทาง LINE</span>
                         </>
                       )}
                     </button>
@@ -1054,12 +1096,12 @@ export function CaseReviewModal({
                     <button
                       type="button"
                       onClick={onClose}
-                      className="py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
+                      className="w-full py-2.5 rounded-xl border border-slate-300 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold cursor-pointer"
                     >
                       ปิดหน้าต่าง
                     </button>
-                  </div>
-                </>
+                  </>
+                )
               ) : (
                 <button
                   type="button"
@@ -1069,72 +1111,6 @@ export function CaseReviewModal({
                   เสร็จสิ้น (ปิดหน้าต่าง)
                 </button>
               )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* LINE ID LINKING MODAL (If patient does not have lineUserId yet) */}
-      {showLineIdModal && (
-        <div className="fixed inset-0 z-70 flex items-center justify-center bg-black/75 p-4 backdrop-blur-xs animate-fadeIn">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 space-y-4 shadow-2xl border border-slate-200">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-              <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#06C755]/10 text-[#06C755] flex items-center justify-center">
-                  <Smartphone className="w-4 h-4" />
-                </div>
-                <div>
-                  <h4 className="font-bold text-sm text-slate-900">ระบุ LINE User ID ของคนไข้</h4>
-                  <p className="text-[11px] text-slate-500">คนไข้: {report.patientName} (เบอร์: {currentCase?.phoneNumber || '-'})</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowLineIdModal(false)}
-                className="text-slate-400 hover:text-slate-700 p-1 cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-emerald-900 text-xs space-y-1">
-              <span className="font-bold block text-emerald-800">💡 ข้อมูลการเชื่อมต่อ LINE Messaging API:</span>
-              <p className="text-[11px] leading-relaxed text-emerald-800">
-                LINE User ID ขึ้นต้นด้วยตัวอักษร <code>U...</code> (เช่น <code>U1234567890abcdef...</code>) ได้จากการที่คนไข้พิมพ์คุยกับบอท หรือคลิกเมนูใน LINE OA
-              </p>
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-bold text-slate-700 block">
-                LINE User ID (ขึ้นต้นด้วย U):
-              </label>
-              <input
-                type="text"
-                placeholder="เช่น U1a2b3c4d5e6f7g8h9i0..."
-                value={patientLineIdInput}
-                onChange={(e) => setPatientLineIdInput(e.target.value)}
-                className="w-full text-xs font-mono p-3 rounded-xl border border-slate-300 focus:outline-hidden focus:border-[#06C755] focus:ring-1 focus:ring-[#06C755]"
-              />
-            </div>
-
-            <div className="flex gap-2 pt-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowLineIdModal(false);
-                  handleCopyReviewForLine();
-                }}
-                className="flex-1 py-2.5 rounded-xl border border-slate-300 text-slate-700 text-xs font-bold hover:bg-slate-50 cursor-pointer"
-              >
-                คัดลอกข้อความไปส่งเอง
-              </button>
-              <button
-                type="button"
-                disabled={!patientLineIdInput.trim() || !patientLineIdInput.trim().startsWith('U') || isSendingLinePush}
-                onClick={() => handleSendRealLinePush(patientLineIdInput.trim())}
-                className="flex-1 py-2.5 rounded-xl bg-[#06C755] hover:bg-[#05b34c] disabled:opacity-40 text-white text-xs font-black shadow-sm cursor-pointer"
-              >
-                {isSendingLinePush ? 'กำลังส่ง...' : 'บันทึก & ยิงเข้า LINE'}
-              </button>
             </div>
           </div>
         </div>

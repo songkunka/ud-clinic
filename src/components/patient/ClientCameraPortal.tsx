@@ -21,6 +21,7 @@ import {
   LogOut,
 } from 'lucide-react';
 import { dbService } from '@/lib/db-service';
+import { liffService } from '@/lib/liff-service';
 
 export function ClientCameraPortal() {
   const {
@@ -74,6 +75,15 @@ export function ClientCameraPortal() {
   const currentAngle = angles[currentAngleIndex];
   const latestReport = activeCaseReports[0] || null;
 
+  // Auto-init LIFF SDK for LINE In-App Browser auto-binding
+  useEffect(() => {
+    liffService.init().then((res) => {
+      if (res.profile?.userId) {
+        localStorage.setItem('ud_patient_line_user_id', res.profile.userId);
+      }
+    });
+  }, []);
+
   // Seamless LINE OA entry via deep link
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -84,7 +94,8 @@ export function ClientCameraPortal() {
         localStorage.setItem('ud_patient_line_user_id', qLineId);
       }
       if (qPhone && !activeClientCase) {
-        clientLoginWithPhone(qPhone);
+        const targetLineId = qLineId || liffService.getUserId() || undefined;
+        clientLoginWithPhone(qPhone, targetLineId);
       }
     }
   }, [activeClientCase, clientLoginWithPhone]);
@@ -347,7 +358,8 @@ export function ClientCameraPortal() {
 
     setIsLoggingIn(true);
     try {
-      const matched = await clientLoginWithPhone(clean);
+      const currentLineId = liffService.getUserId() || (typeof window !== 'undefined' ? localStorage.getItem('ud_patient_line_user_id') || '' : '');
+      const matched = await clientLoginWithPhone(clean, currentLineId || undefined);
       if (!matched) {
         setLoginError(
           'ไม่พบข้อมูลเคสของเบอร์โทรนี้ในระบบ กรุณาติดต่อคลินิกเพื่อลงทะเบียนก่อนค่ะ'
