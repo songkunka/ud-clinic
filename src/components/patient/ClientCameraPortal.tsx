@@ -406,8 +406,8 @@ export function ClientCameraPortal() {
               <input
                 type="tel"
                 inputMode="numeric"
-                pattern="[0-9]*"
-                maxLength={10}
+                maxLength={14}
+                placeholder="เช่น 095-xxx-xxxx"
                 value={phoneNumberInput}
                 onChange={(e) => setPhoneNumberInput(e.target.value)}
                 disabled={isLoggingIn}
@@ -445,7 +445,7 @@ export function ClientCameraPortal() {
             </button>
           </form>
 
-          <div className="text-center text-[11px] text-slate-500 space-y-1">
+          <div className="text-center text-[11px] text-slate-500 space-y-1.5">
             <p>หากยังไม่ได้ลงทะเบียนเคส กรุณาติดต่อเจ้าหน้าที่คลินิก</p>
             <a
               href="tel:0814567890"
@@ -453,6 +453,15 @@ export function ClientCameraPortal() {
             >
               โทร 081-456-7890
             </a>
+            <div className="pt-2">
+              <button
+                type="button"
+                onClick={() => setPhoneNumberInput('000-000-0000')}
+                className="text-yellow-400 hover:text-yellow-300 font-black text-sm sm:text-base leading-relaxed tracking-wide transition-colors cursor-pointer block mx-auto underline-offset-4 hover:underline"
+              >
+                สำหรับการทดสอบให้ใส่ 000-000-0000 (ศูนย์สิบตัว)
+              </button>
+            </div>
           </div>
         </div>
       </div>
