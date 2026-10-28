@@ -226,23 +226,6 @@ export function useAppStore() {
       }
     }
 
-    // Fallback for demo testing account: 000-000-0000
-    if (!matched && cleanPhone === '0000000000') {
-      matched = cases.find((c) => c.phoneNumber.replace(/[^0-9]/g, '') === '0000000000') || cases[0] || {
-        id: 'case-test-demo',
-        patientId: 'pat-test-demo',
-        patientName: 'คนไข้ทดสอบระบบ (Test Demo)',
-        hn: '670000001',
-        phoneNumber: '0000000000',
-        serviceType: 'SMAS Full Face-Lift & Neck Lift',
-        surgeonName: 'นพ.สมชาย เกียรติเวชช์',
-        surgeryDate: new Date().toISOString().split('T')[0],
-        followUpStartDate: new Date().toISOString().split('T')[0],
-        caseStatus: 'active',
-        token: 'ud_test_demo',
-      };
-    }
-
     if (matched) {
       const finalLineId = (lineUserId || (typeof window !== 'undefined' ? localStorage.getItem('ud_patient_line_user_id') || '' : '')).trim();
       if (finalLineId && matched.lineUserId !== finalLineId) {
