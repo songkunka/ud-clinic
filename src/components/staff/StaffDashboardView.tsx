@@ -112,8 +112,8 @@ export function StaffDashboardView() {
   // Filtered reports
   const filteredReports = reports.filter((r) => {
     const matchesSearch =
-      r.patientName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      r.hn.toLowerCase().includes(searchQuery.toLowerCase());
+      (r.patientName || '').toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (r.hn || '').toLowerCase().includes(searchQuery.toLowerCase());
 
     if (!matchesSearch) return false;
 
@@ -133,11 +133,11 @@ export function StaffDashboardView() {
     const q = searchQuery.toLowerCase();
     return groupedSchedules.filter(
       (g) =>
-        g.patientName.toLowerCase().includes(q) ||
-        g.hn.toLowerCase().includes(q) ||
-        g.phoneNumber.toLowerCase().includes(q) ||
-        g.procedureName.toLowerCase().includes(q) ||
-        g.surgeonName.toLowerCase().includes(q)
+        (g.patientName || '').toLowerCase().includes(q) ||
+        (g.hn || '').toLowerCase().includes(q) ||
+        (g.phoneNumber || '').toLowerCase().includes(q) ||
+        (g.procedureName || '').toLowerCase().includes(q) ||
+        (g.surgeonName || '').toLowerCase().includes(q)
     );
   }, [groupedSchedules, searchQuery]);
 

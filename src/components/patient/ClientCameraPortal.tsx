@@ -25,6 +25,7 @@ import { liffService } from '@/lib/liff-service';
 
 export function ClientCameraPortal() {
   const {
+    isLoaded,
     activeClientCase,
     clientLoginWithPhone,
     clientLogout,
@@ -84,9 +85,10 @@ export function ClientCameraPortal() {
     });
   }, []);
 
-  // Seamless LINE OA entry via deep link
+  // Seamless LINE OA entry via deep link (attempt once per page load)
+  const deepLinkAttemptedRef = useRef(false);
   useEffect(() => {
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && isLoaded && !deepLinkAttemptedRef.current) {
       const sp = new URLSearchParams(window.location.search);
       const qLineId = sp.get('lineUserId');
       const qPhone = sp.get('phone');
@@ -94,11 +96,12 @@ export function ClientCameraPortal() {
         localStorage.setItem('ud_patient_line_user_id', qLineId);
       }
       if (qPhone && !activeClientCase) {
+        deepLinkAttemptedRef.current = true;
         const targetLineId = qLineId || liffService.getUserId() || undefined;
         clientLoginWithPhone(qPhone, targetLineId);
       }
     }
-  }, [activeClientCase, clientLoginWithPhone]);
+  }, [isLoaded, activeClientCase, clientLoginWithPhone]);
 
   // Track retake requests from medical team
   useEffect(() => {
@@ -165,7 +168,7 @@ export function ClientCameraPortal() {
 
       if (videoRef.current) {
         videoRef.current.srcObject = stream;
-        videoRef.current.play();
+        videoRef.current.play().catch(() => {});
         setCameraActive(true);
       }
     } catch (err: unknown) {
