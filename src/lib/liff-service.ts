@@ -23,6 +23,17 @@ class LiffService {
       return { success: false, isInClient: false, profile: null, error: 'Server-side environment' };
     }
 
+    // Only run LIFF SDK inside LINE In-App Browser to prevent Universal Link / app switch crash in external mobile browsers (Safari/Chrome)
+    const isLineBrowser = typeof navigator !== 'undefined' && /Line\//i.test(navigator.userAgent);
+    if (!isLineBrowser) {
+      return {
+        success: false,
+        isInClient: false,
+        profile: null,
+        error: 'External browser (Safari/Chrome) - skipped LIFF init to prevent Universal Link crash',
+      };
+    }
+
     if (this.isInitialized && this.profile) {
       return {
         success: true,
