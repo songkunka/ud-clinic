@@ -15,10 +15,13 @@ export function getSupabaseCredentials(): { url: string; key: string } {
   let key = getEnvKey();
 
   if (typeof window !== 'undefined') {
-    const storedUrl = localStorage.getItem('ud_supabase_url');
-    const storedKey = localStorage.getItem('ud_supabase_anon_key');
-    if (storedUrl) url = storedUrl;
-    if (storedKey) key = storedKey;
+    // Some in-app/private browsers throw on localStorage access
+    try {
+      const storedUrl = localStorage.getItem('ud_supabase_url');
+      const storedKey = localStorage.getItem('ud_supabase_anon_key');
+      if (storedUrl) url = storedUrl;
+      if (storedKey) key = storedKey;
+    } catch {}
   }
 
   return { url: cleanSupabaseUrl(url), key: key.trim() };
@@ -88,6 +91,3 @@ export function clearSupabaseCredentials(): void {
     lastKey = '';
   }
 }
-
-// Backward-compatible export
-export const supabase = getSupabase();

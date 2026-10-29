@@ -2,5 +2,10 @@
   command = "npm run build"
   publish = ".next"
 
+[build.environment]
+  # Serve each visitor JS chunks from the deploy their page came from,
+  # so open tabs don't crash with "This page couldn't load" after a redeploy
+  NETLIFY_NEXT_SKEW_PROTECTION = "true"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
